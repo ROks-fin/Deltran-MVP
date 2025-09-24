@@ -211,6 +211,14 @@ async def root():
     }
 
 
+# Metrics endpoint
+from gateway.middleware.metrics import metrics_handler
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return await metrics_handler()
+
 # API Routes
 app.include_router(payments_router, prefix="/payments", tags=["payments"])
 app.include_router(settlement_router, prefix="/settlement", tags=["settlement"])
