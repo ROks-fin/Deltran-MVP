@@ -1,0 +1,628 @@
+syntax = "proto3";
+
+package deltran.fx.v1;
+
+option go_package = "github.com/deltran/pb/fx/v1;fxv1";
+
+import "google/protobuf/timestamp.proto";
+
+// FXService manages FX orchestration, market maker integration, and PvP settlement
+service FXService {
+  // Request FX quote from market makers
+  rpc RequestQuote(FXQuoteRequest) returns (FXQuoteResponse);
+
+  // Accept quote and create FX deal
+  rpc AcceptQuote(AcceptQuoteRequest) returns (AcceptQuoteResponse);
+
+  // Execute PvP (Payment vs Payment) atomic settlement
+  rpc ExecutePvP(ExecutePvPRequest) returns (ExecutePvPResponse);
+
+  // Get FX deal status
+  rpc GetDealStatus(GetDealStatusRequest) returns (GetDealStatusResponse);
+
+  // Subscribe to market rates (streaming)
+  rpc StreamMarketRates(StreamMarketRatesRequest) returns (stream MarketRateUpdate);
+
+  // Register market maker
+  rpc RegisterMarketMaker(RegisterMarketMakerRequest) returns (RegisterMarketMakerResponse);
+
+  // Update market maker liquidity
+  rpc UpdateLiquidity(UpdateLiquidityRequest) returns (UpdateLiquidityResponse);
+
+  // Get FX statistics
+  rpc GetFXStats(GetFXStatsRequest) returns (GetFXStatsResponse);
+}
+
+// FXQuoteRequest requests quotes from multiple market makers
+message FXQuoteRequest {
+  string request_id = 1; // UUIDv7 for ordering
+  string payment_id = 2; // Associated payment
+
+  // FX pair
+  string from_currency = 3; // ISO 4217
+  string to_currency = 4;   // ISO 4217
+
+  // Amount (in from_currency)
+  string amount = 5;
+
+  // Quote type
+  QuoteType quote_type = 6;
+
+  // Settlement date
+  google.protobuf.Timestamp value_date = 7;
+
+  // Requester information
+  string requester_id = 8;
+  string requester_name = 9;
+
+  // Constraints
+  int32 max_slippage_bps = 10; // Max acceptable slippage (basis points)
+  int32 ttl_seconds = 11; // Quote time-to-live (default 10s)
+
+  // Routing preferences
+  repeated string preferred_market_makers = 12;
+  bool allow_split_execution = 13; // Allow splitting across multiple MMs
+}
+
+// QuoteType
+enum QuoteType {
+  QUOTE_TYPE_UNSPECIFIED = 0;
+  QUOTE_TYPE_SPOT = 1;       // T+0 settlement
+  QUOTE_TYPE_TOM = 2;        // T+1 settlement (tomorrow)
+  QUOTE_TYPE_FORWARD = 3;    // T+N settlement
+  QUOTE_TYPE_SWAP = 4;       // FX swap
+}
+
+// FXQuoteResponse returns best quotes from market makers
+message FXQuoteResponse {
+  string request_id = 1;
+
+  // Best aggregated quote
+  FXQuote best_quote = 2;
+
+  // All quotes received
+  repeated FXQuote all_quotes = 3;
+
+  // Market depth
+  MarketDepth market_depth = 4;
+
+  // Quote validity
+  google.protobuf.Timestamp expires_at = 5;
+  int32 ttl_seconds = 6;
+
+  // Execution plan (if split across multiple MMs)
+  ExecutionPlan execution_plan = 7;
+}
+
+// FXQuote represents a quote from a market maker
+message FXQuote {
+  string quote_id = 1; // UUIDv7
+  string market_maker_id = 2;
+  string market_maker_name = 3;
+
+  // Quote details
+  string from_currency = 4;
+  string to_currency = 5;
+  string from_amount = 6;
+  string to_amount = 7;
+
+  // Rate
+  string rate = 8; // Exchange rate (to 8 decimal places)
+  string inverse_rate = 9;
+
+  // Pricing
+  string mid_rate = 10; // Mid-market rate
+  string spread_bps = 11; // Spread in basis points
+  string markup_bps = 12; // Markup over mid-market
+
+  // Quote metadata
+  google.protobuf.Timestamp quoted_at = 13;
+  google.protobuf.Timestamp expires_at = 14;
+  int32 ttl_seconds = 15;
+
+  // Liquidity
+  string available_liquidity = 16; // Max amount MM can handle
+  LiquidityTier liquidity_tier = 17;
+
+  // Settlement
+  QuoteType quote_type = 18;
+  google.protobuf.Timestamp value_date = 19;
+
+  // Risk score
+  float risk_score = 20; // 0.0-1.0 (higher = riskier)
+  string risk_reason = 21;
+}
+
+// LiquidityTier
+enum LiquidityTier {
+  LIQUIDITY_TIER_UNSPECIFIED = 0;
+  LIQUIDITY_TIER_1 = 1; // > $10M
+  LIQUIDITY_TIER_2 = 2; // $1M - $10M
+  LIQUIDITY_TIER_3 = 3; // $100K - $1M
+  LIQUIDITY_TIER_4 = 4; // < $100K
+}
+
+// MarketDepth shows aggregated liquidity
+message MarketDepth {
+  string currency_pair = 1; // e.g., "EUR/USD"
+
+  // Bid side (buying from_currency)
+  repeated DepthLevel bids = 2;
+
+  // Ask side (selling from_currency)
+  repeated DepthLevel asks = 3;
+
+  // Mid-market rate
+  string mid_rate = 4;
+  string spread_bps = 5;
+
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+// DepthLevel represents price level in order book
+message DepthLevel {
+  string rate = 1;
+  string amount = 2;
+  int32 market_maker_count = 3; // Number of MMs at this level
+}
+
+// ExecutionPlan for split orders
+message ExecutionPlan {
+  string plan_id = 1;
+  repeated ExecutionLeg legs = 2;
+
+  // Aggregated metrics
+  string total_from_amount = 3;
+  string total_to_amount = 4;
+  string weighted_avg_rate = 5;
+  string total_spread_bps = 6;
+}
+
+// ExecutionLeg represents a portion of the trade
+message ExecutionLeg {
+  string leg_id = 1;
+  string quote_id = 2;
+  string market_maker_id = 3;
+
+  string from_amount = 4;
+  string to_amount = 5;
+  string rate = 6;
+
+  int32 sequence = 7; // Execution order
+  float allocation_percentage = 8; // % of total trade
+}
+
+// AcceptQuoteRequest accepts a quote and creates FX deal
+message AcceptQuoteRequest {
+  string request_id = 1;
+  string quote_id = 2; // Or multiple leg_ids if split
+  repeated string leg_ids = 3; // For split execution
+
+  string payment_id = 4;
+
+  // PvP settlement accounts
+  string from_account = 5; // Account to debit from_currency
+  string to_account = 6;   // Account to credit to_currency
+
+  // Confirmation
+  string rate_confirmation = 7; // Client must confirm the rate
+  google.protobuf.Timestamp accepted_at = 8;
+}
+
+// AcceptQuoteResponse returns FX deal
+message AcceptQuoteResponse {
+  string deal_id = 1; // UUIDv7
+  string payment_id = 2;
+
+  FXDeal deal = 3;
+
+  DealStatus status = 4;
+  string message = 5;
+}
+
+// FXDeal represents an executed FX transaction
+message FXDeal {
+  string deal_id = 1;
+  string payment_id = 2;
+  string request_id = 3;
+
+  // Trade details
+  string from_currency = 4;
+  string to_currency = 5;
+  string from_amount = 6;
+  string to_amount = 7;
+  string rate = 8;
+
+  // Parties
+  string buyer_id = 9;  // Buying from_currency
+  string seller_id = 10; // Selling from_currency
+  repeated MarketMakerExecution market_makers = 11;
+
+  // Settlement
+  QuoteType deal_type = 12;
+  google.protobuf.Timestamp value_date = 13;
+  SettlementMethod settlement_method = 14;
+
+  // Status
+  DealStatus status = 15;
+  google.protobuf.Timestamp created_at = 16;
+  google.protobuf.Timestamp updated_at = 17;
+  google.protobuf.Timestamp settled_at = 18;
+
+  // PvP details
+  PvPSettlement pvp_settlement = 19;
+
+  // Risk
+  float risk_score = 20;
+  repeated string risk_flags = 21;
+}
+
+// MarketMakerExecution tracks MM participation
+message MarketMakerExecution {
+  string market_maker_id = 1;
+  string market_maker_name = 2;
+  string quote_id = 3;
+  string leg_id = 4;
+
+  string from_amount = 5;
+  string to_amount = 6;
+  string rate = 7;
+
+  float allocation_percentage = 8;
+  string fee = 9; // MM fee
+
+  DealStatus status = 10;
+  google.protobuf.Timestamp executed_at = 11;
+}
+
+// SettlementMethod
+enum SettlementMethod {
+  SETTLEMENT_METHOD_UNSPECIFIED = 0;
+  SETTLEMENT_METHOD_PVP = 1;      // Payment vs Payment (atomic)
+  SETTLEMENT_METHOD_DVP = 2;      // Delivery vs Payment
+  SETTLEMENT_METHOD_NETTING = 3;  // Multilateral netting
+  SETTLEMENT_METHOD_GROSS = 4;    // Gross settlement
+}
+
+// DealStatus
+enum DealStatus {
+  DEAL_STATUS_UNSPECIFIED = 0;
+  DEAL_STATUS_PENDING = 1;        // Quote accepted, awaiting execution
+  DEAL_STATUS_EXECUTING = 2;      // Executing with MMs
+  DEAL_STATUS_EXECUTED = 3;       // Trade executed, awaiting settlement
+  DEAL_STATUS_SETTLING = 4;       // PvP settlement in progress
+  DEAL_STATUS_SETTLED = 5;        // Both legs settled
+  DEAL_STATUS_PARTIALLY_SETTLED = 6; // One leg settled
+  DEAL_STATUS_FAILED = 7;         // Execution or settlement failed
+  DEAL_STATUS_CANCELLED = 8;      // Deal cancelled
+  DEAL_STATUS_EXPIRED = 9;        // Quote expired before acceptance
+}
+
+// ExecutePvPRequest initiates atomic PvP settlement
+message ExecutePvPRequest {
+  string deal_id = 1;
+  string payment_id = 2;
+
+  // Leg A (from_currency payment)
+  PvPLeg leg_a = 3;
+
+  // Leg B (to_currency payment)
+  PvPLeg leg_b = 4;
+
+  // Atomic settlement constraints
+  int32 timeout_seconds = 5; // Max time to complete both legs (default 60s)
+  bool allow_partial_settlement = 6; // Allow one leg to settle if other fails (default: false)
+
+  // Execution mode
+  PvPMode pvp_mode = 7;
+}
+
+// PvPLeg represents one side of PvP settlement
+message PvPLeg {
+  string leg_id = 1;
+  string currency = 2;
+  string amount = 3;
+
+  // From/To accounts
+  string from_account = 4;
+  string to_account = 5;
+
+  // Settlement details
+  string settlement_reference = 6;
+  google.protobuf.Timestamp value_date = 7;
+
+  // Status
+  LegStatus status = 8;
+  google.protobuf.Timestamp executed_at = 9;
+}
+
+// LegStatus
+enum LegStatus {
+  LEG_STATUS_UNSPECIFIED = 0;
+  LEG_STATUS_PENDING = 1;
+  LEG_STATUS_LOCKED = 2;      // Funds locked/reserved
+  LEG_STATUS_EXECUTING = 3;
+  LEG_STATUS_COMPLETED = 4;
+  LEG_STATUS_FAILED = 5;
+  LEG_STATUS_ROLLED_BACK = 6; // Rolled back due to other leg failure
+}
+
+// PvPMode
+enum PvPMode {
+  PVP_MODE_UNSPECIFIED = 0;
+  PVP_MODE_SIMULTANEOUS = 1;  // Both legs execute simultaneously
+  PVP_MODE_SEQUENTIAL = 2;    // Leg A then Leg B
+  PVP_MODE_ESCROW = 3;        // Both legs to escrow, then release
+  PVP_MODE_CLS = 4;           // CLS-style netting
+}
+
+// ExecutePvPResponse returns PvP settlement result
+message ExecutePvPResponse {
+  string deal_id = 1;
+  string payment_id = 2;
+
+  PvPSettlement settlement = 3;
+
+  DealStatus status = 4;
+  string message = 5;
+}
+
+// PvPSettlement tracks atomic settlement
+message PvPSettlement {
+  string settlement_id = 1; // UUIDv7
+  string deal_id = 2;
+
+  // Legs
+  PvPLeg leg_a = 3;
+  PvPLeg leg_b = 4;
+
+  // Status
+  PvPStatus pvp_status = 5;
+  PvPMode pvp_mode = 6;
+
+  // Timing
+  google.protobuf.Timestamp started_at = 7;
+  google.protobuf.Timestamp completed_at = 8;
+  int32 duration_ms = 9;
+
+  // Atomicity guarantee
+  bool atomic_completion = 10; // Both legs completed atomically
+  string failure_reason = 11;
+
+  // Proof
+  bytes settlement_proof = 12; // Cryptographic proof of atomic settlement
+  bytes signature = 13;
+}
+
+// PvPStatus
+enum PvPStatus {
+  PVP_STATUS_UNSPECIFIED = 0;
+  PVP_STATUS_INITIATED = 1;
+  PVP_STATUS_LOCKING_FUNDS = 2;   // Locking funds on both sides
+  PVP_STATUS_FUNDS_LOCKED = 3;    // Both sides locked
+  PVP_STATUS_EXECUTING = 4;       // Executing both legs
+  PVP_STATUS_COMPLETED = 5;       // Both legs completed
+  PVP_STATUS_PARTIAL = 6;         // Only one leg completed (should not happen in strict PvP)
+  PVP_STATUS_FAILED = 7;          // Settlement failed
+  PVP_STATUS_ROLLED_BACK = 8;     // Rolled back due to failure
+}
+
+// GetDealStatusRequest
+message GetDealStatusRequest {
+  string deal_id = 1;
+}
+
+// GetDealStatusResponse
+message GetDealStatusResponse {
+  FXDeal deal = 1;
+  repeated DealEvent events = 2; // Event history
+}
+
+// DealEvent tracks deal lifecycle
+message DealEvent {
+  string event_id = 1;
+  string deal_id = 2;
+  DealEventType event_type = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  map<string, string> metadata = 5;
+}
+
+// DealEventType
+enum DealEventType {
+  DEAL_EVENT_TYPE_UNSPECIFIED = 0;
+  DEAL_EVENT_TYPE_QUOTE_REQUESTED = 1;
+  DEAL_EVENT_TYPE_QUOTE_RECEIVED = 2;
+  DEAL_EVENT_TYPE_QUOTE_ACCEPTED = 3;
+  DEAL_EVENT_TYPE_DEAL_CREATED = 4;
+  DEAL_EVENT_TYPE_EXECUTING = 5;
+  DEAL_EVENT_TYPE_EXECUTED = 6;
+  DEAL_EVENT_TYPE_PVP_INITIATED = 7;
+  DEAL_EVENT_TYPE_LEG_A_LOCKED = 8;
+  DEAL_EVENT_TYPE_LEG_B_LOCKED = 9;
+  DEAL_EVENT_TYPE_LEG_A_SETTLED = 10;
+  DEAL_EVENT_TYPE_LEG_B_SETTLED = 11;
+  DEAL_EVENT_TYPE_SETTLEMENT_COMPLETED = 12;
+  DEAL_EVENT_TYPE_SETTLEMENT_FAILED = 13;
+  DEAL_EVENT_TYPE_ROLLED_BACK = 14;
+}
+
+// StreamMarketRatesRequest subscribes to real-time rates
+message StreamMarketRatesRequest {
+  repeated string currency_pairs = 1; // e.g., ["EUR/USD", "GBP/USD"]
+  int32 update_frequency_ms = 2; // Min time between updates (default 100ms)
+}
+
+// MarketRateUpdate streaming update
+message MarketRateUpdate {
+  string currency_pair = 1;
+
+  // Rates
+  string bid_rate = 2;
+  string ask_rate = 3;
+  string mid_rate = 4;
+  string spread_bps = 5;
+
+  // Liquidity
+  string bid_liquidity = 6;
+  string ask_liquidity = 7;
+
+  // Metadata
+  google.protobuf.Timestamp timestamp = 8;
+  repeated string market_maker_ids = 9; // Contributing MMs
+}
+
+// RegisterMarketMakerRequest
+message RegisterMarketMakerRequest {
+  string market_maker_id = 1;
+  string market_maker_name = 2;
+  string legal_entity_identifier = 3; // LEI
+
+  // Supported currency pairs
+  repeated CurrencyPairConfig supported_pairs = 4;
+
+  // API endpoints
+  string quote_endpoint = 5;
+  string execution_endpoint = 6;
+  string status_endpoint = 7;
+
+  // Authentication
+  string api_key = 8;
+  bytes public_key = 9; // For message signing
+
+  // Capabilities
+  repeated QuoteType supported_quote_types = 10;
+  repeated SettlementMethod supported_settlement_methods = 11;
+
+  // Limits
+  string min_transaction_amount = 12;
+  string max_transaction_amount = 13;
+  string daily_limit = 14;
+
+  // Compliance
+  string regulator = 15;
+  string license_number = 16;
+}
+
+// CurrencyPairConfig
+message CurrencyPairConfig {
+  string from_currency = 1;
+  string to_currency = 2;
+
+  // Pricing
+  string min_spread_bps = 3;
+  string typical_spread_bps = 4;
+
+  // Liquidity
+  string min_amount = 5;
+  string max_amount = 6;
+  string available_liquidity = 7;
+
+  // Settlement
+  repeated QuoteType supported_quote_types = 8;
+  google.protobuf.Timestamp value_date = 9;
+}
+
+// RegisterMarketMakerResponse
+message RegisterMarketMakerResponse {
+  bool success = 1;
+  string market_maker_id = 2;
+  string message = 3;
+  google.protobuf.Timestamp registered_at = 4;
+}
+
+// UpdateLiquidityRequest
+message UpdateLiquidityRequest {
+  string market_maker_id = 1;
+
+  repeated LiquidityUpdate liquidity_updates = 2;
+}
+
+// LiquidityUpdate
+message LiquidityUpdate {
+  string currency_pair = 1;
+
+  // Bid side (buying from_currency)
+  string bid_liquidity = 2;
+  string bid_rate = 3;
+
+  // Ask side (selling from_currency)
+  string ask_liquidity = 4;
+  string ask_rate = 5;
+
+  google.protobuf.Timestamp timestamp = 6;
+  int32 ttl_seconds = 7; // How long this liquidity is valid
+}
+
+// UpdateLiquidityResponse
+message UpdateLiquidityResponse {
+  bool success = 1;
+  string message = 2;
+  int32 updates_processed = 3;
+}
+
+// GetFXStatsRequest
+message GetFXStatsRequest {
+  // Time range
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+
+  // Filters
+  repeated string currency_pairs = 3;
+  repeated string market_maker_ids = 4;
+}
+
+// GetFXStatsResponse
+message GetFXStatsResponse {
+  // Volume
+  int64 total_deals = 1;
+  string total_volume_usd = 2;
+  map<string, string> volume_by_currency_pair = 3;
+
+  // Performance
+  int64 p50_execution_time_ms = 4;
+  int64 p95_execution_time_ms = 5;
+  int64 p99_execution_time_ms = 6;
+
+  // PvP statistics
+  int64 total_pvp_settlements = 7;
+  int64 successful_pvp_settlements = 8;
+  int64 failed_pvp_settlements = 9;
+  float pvp_success_rate = 10;
+
+  // Market makers
+  int32 active_market_makers = 11;
+  map<string, MarketMakerStats> mm_stats = 12;
+
+  // Pricing
+  map<string, AveragePricing> avg_pricing = 13;
+}
+
+// MarketMakerStats
+message MarketMakerStats {
+  string market_maker_id = 1;
+  string market_maker_name = 2;
+
+  int64 deals_executed = 3;
+  string total_volume_usd = 4;
+  float market_share_percentage = 5;
+
+  string avg_spread_bps = 6;
+  int64 avg_response_time_ms = 7;
+
+  float fill_rate = 8; // % of quotes that resulted in deals
+}
+
+// AveragePricing
+message AveragePricing {
+  string currency_pair = 1;
+
+  string avg_bid_rate = 2;
+  string avg_ask_rate = 3;
+  string avg_mid_rate = 4;
+  string avg_spread_bps = 5;
+
+  string min_rate = 6;
+  string max_rate = 7;
+
+  int32 quote_count = 8;
+}

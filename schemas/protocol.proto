@@ -1,0 +1,522 @@
+syntax = "proto3";
+
+package deltran.protocol.v1;
+
+option go_package = "github.com/deltran/pb/protocol/v1;protocolv1";
+
+import "google/protobuf/timestamp.proto";
+
+// =========================================================================
+// PROTOCOL STATE MACHINE
+// =========================================================================
+
+// ProtocolState tracks payment/batch lifecycle
+enum ProtocolState {
+  PROTOCOL_STATE_UNSPECIFIED = 0;
+
+  // Payment states
+  PAYMENT_INITIATED = 1;          // INSTRUCT_PAYMENT received
+  PAYMENT_VALIDATED = 2;          // Schema + sanctions OK
+  PAYMENT_ELIGIBILITY_CONFIRMED = 3;  // Pre-auth tokens validated
+  PAYMENT_NETTING_PROPOSED = 4;   // In netting window
+
+  // Batch states
+  NETTING_APPROVED = 10;          // All banks ACK'd
+  SETTLEMENT_PENDING = 11;        // 2-phase commit started (PREPARE)
+  SETTLEMENT_FINALIZED = 12;      // Atomically completed (COMMIT)
+  PROOF_GENERATED = 13;           // SETTLEMENT_PROOF signed
+
+  // Failure states
+  PAYMENT_REJECTED = 20;          // Validation/sanctions failed
+  NETTING_TIMEOUT = 21;           // ACK timeout, requeue
+  SETTLEMENT_PARTIAL = 22;        // Partial settlement (some banks failed)
+  SETTLEMENT_FAILED = 23;         // Full rollback
+}
+
+// =========================================================================
+// INSTRUCT_PAYMENT (Protocol Message 1)
+// =========================================================================
+
+// InstructPayment initiates a new payment (sent by banks/PSPs only)
+message InstructPayment {
+  // Payment metadata
+  string payment_id = 1;           // UUIDv7
+  string uetr = 2;                 // ISO 20022 UETR
+  string idempotency_key = 3;      // Client-provided idempotency
+
+  // Anti-replay protection
+  uint64 nonce = 4;                // Monotonic sequence per sender
+  int64 timestamp_nanos = 5;       // TTL enforcement (5 min window)
+  uint32 ttl_seconds = 6;          // Time-to-live (default 300)
+
+  // Network context
+  string network_id = 7;           // e.g., "deltran-mainnet"
+  string corridor_id = 8;          // e.g., "UAE-IND"
+
+  // Payment details
+  PaymentDetails payment = 9;
+
+  // Eligibility tokens (PRE-AUTH requirement)
+  EligibilityToken debit_token = 10;   // From debtor bank
+  EligibilityToken credit_token = 11;  // From creditor bank
+
+  // Canonical format
+  bytes canonical_hash = 12;       // SHA3-256 of canonical bytes
+
+  // Sender signature (bank/PSP Ed25519)
+  bytes sender_signature = 13;
+  string sender_public_key = 14;   // For verification
+  string sender_bank_id = 15;      // BIC/LEI
+}
+
+// PaymentDetails (embedded in InstructPayment)
+message PaymentDetails {
+  // Amount and currency
+  string amount = 1;               // Fixed-point string (e.g., "1000.50")
+  string currency = 2;             // ISO 4217 (USD, EUR, AED, etc.)
+  uint32 scale = 3;                // Decimal places (2 for USD)
+
+  // Parties
+  Account debtor = 4;
+  Account creditor = 5;
+
+  // ISO 20022 fields
+  string purpose_code = 6;         // ISO 20022 purpose (SALA, TRADE, etc.)
+  string remittance_info = 7;      // Unstructured text
+
+  // Settlement preferences
+  SettlementMethod settlement_method = 8;
+  google.protobuf.Timestamp value_date = 9;
+}
+
+// Account information
+message Account {
+  string account_id = 1;           // IBAN or local format
+  string account_name = 2;
+  string bic = 3;                  // BIC/SWIFT code
+  string lei = 4;                  // Legal Entity Identifier
+  string bank_name = 5;
+  string country_code = 6;         // ISO 3166-1 alpha-2
+
+  // Compliance (Travel Rule)
+  Address address = 7;
+}
+
+message Address {
+  string address_line_1 = 1;
+  string address_line_2 = 2;
+  string city = 3;
+  string postal_code = 4;
+  string country_code = 5;
+}
+
+// SettlementMethod
+enum SettlementMethod {
+  SETTLEMENT_METHOD_UNSPECIFIED = 0;
+  SETTLEMENT_METHOD_INSTANT = 1;       // Real-time (no netting)
+  SETTLEMENT_METHOD_PVP = 2;           // Payment vs Payment (atomic)
+  SETTLEMENT_METHOD_NETTING = 3;       // Batch netting (default)
+  SETTLEMENT_METHOD_CORRESPONDENT = 4; // Legacy correspondent banking
+}
+
+// =========================================================================
+// ELIGIBILITY TOKEN (Pre-Auth Requirement)
+// =========================================================================
+
+// EligibilityToken proves bank has reserved funds/limits
+message EligibilityToken {
+  string token_id = 1;             // UUIDv7
+  string bank_id = 2;              // Issuing bank BIC/LEI
+  string payment_id = 3;           // Reference to payment
+
+  // Token details
+  string amount = 4;               // Reserved amount
+  string currency = 5;
+  google.protobuf.Timestamp issued_at = 6;
+  google.protobuf.Timestamp expires_at = 7;  // Short TTL (15 min)
+
+  // Authorization
+  TokenType token_type = 8;
+  string account_id = 9;           // Which account is reserved
+
+  // Bank signature (Ed25519)
+  bytes signature = 10;
+  string public_key = 11;
+}
+
+enum TokenType {
+  TOKEN_TYPE_UNSPECIFIED = 0;
+  TOKEN_TYPE_DEBIT = 1;            // Debtor bank reserves outgoing funds
+  TOKEN_TYPE_CREDIT = 2;           // Creditor bank confirms receiving capacity
+}
+
+// =========================================================================
+// NETTING (Protocol Message 2)
+// =========================================================================
+
+// NettingProposal proposes a multilateral netting batch
+message NettingProposal {
+  // Batch metadata
+  string batch_id = 1;             // UUIDv7
+  string window_id = 2;            // e.g., "2025-09-30T10:00:00Z"
+  string corridor_id = 3;
+  string currency = 4;
+
+  // Timing
+  google.protobuf.Timestamp window_start = 5;
+  google.protobuf.Timestamp window_end = 6;
+  google.protobuf.Timestamp proposed_at = 7;
+
+  // Netting results
+  repeated BilateralObligation obligations = 8;
+  repeated NetTransfer net_transfers = 9;
+
+  // Merkle commitment
+  bytes merkle_root = 10;          // Root of obligation Merkle tree
+
+  // Metrics
+  string gross_amount = 11;
+  string net_amount = 12;
+  float netting_efficiency = 13;   // (gross - net) / gross
+
+  // Required confirmations (banks that MUST ACK)
+  repeated string requires_confirmations = 14;  // BIC/LEI list
+
+  // Thresholds check
+  bool meets_min_volume = 15;      // >= $100k
+  bool meets_min_efficiency = 16;  // >= 15%
+  int32 participant_count = 17;    // >= 2
+}
+
+// BilateralObligation (bank A owes bank B)
+message BilateralObligation {
+  string obligation_id = 1;
+  string debtor_bank = 2;          // BIC/LEI
+  string creditor_bank = 3;        // BIC/LEI
+  string gross_amount = 4;
+  string currency = 5;
+  int32 payment_count = 6;         // Number of payments netted
+  repeated string payment_ids = 7; // Constituent payments
+}
+
+// NetTransfer (optimized transfer after netting)
+message NetTransfer {
+  string transfer_id = 1;
+  string from_bank = 2;            // BIC/LEI
+  string to_bank = 3;              // BIC/LEI
+  string net_amount = 4;
+  string currency = 5;
+
+  // ISO 20022 instruction (pacs.008)
+  bytes iso20022_instruction = 6;  // Serialized pacs.008 XML/JSON
+}
+
+// =========================================================================
+// BANK CONFIRMATION (ACK/NACK for netting)
+// =========================================================================
+
+// BankConfirmation sent by banks in response to NettingProposal
+message BankConfirmation {
+  string confirmation_id = 1;      // UUIDv7
+  string batch_id = 2;             // Reference to NettingProposal
+  string bank_id = 3;              // Confirming bank BIC/LEI
+
+  // Decision
+  ConfirmationStatus status = 4;
+  string reason = 5;               // If NACK, reason (e.g., "insufficient liquidity")
+
+  // Timestamp and signature
+  google.protobuf.Timestamp confirmed_at = 6;
+  bytes signature = 7;             // Bank's Ed25519 signature
+  string public_key = 8;
+
+  // Liquidity attestation (optional)
+  LiquidityAttestation liquidity = 9;
+}
+
+enum ConfirmationStatus {
+  CONFIRMATION_STATUS_UNSPECIFIED = 0;
+  CONFIRMATION_STATUS_ACK = 1;     // Approved
+  CONFIRMATION_STATUS_NACK = 2;    // Rejected
+  CONFIRMATION_STATUS_TIMEOUT = 3; // No response within TTL
+}
+
+// LiquidityAttestation proves bank has funds
+message LiquidityAttestation {
+  string bank_id = 1;
+  string currency = 2;
+  string reserved_amount = 3;
+  google.protobuf.Timestamp valid_until = 4;
+  bytes signature = 5;
+}
+
+// =========================================================================
+// FINALIZE (Protocol Message 3) - 2-Phase Commit
+// =========================================================================
+
+// FinalizeSettlement triggers 2PC commit phase
+message FinalizeSettlement {
+  string batch_id = 1;
+
+  // Phase 1 (PREPARE) results
+  repeated BankConfirmation confirmations = 2;
+  bool all_banks_ready = 3;        // True if all ACK'd
+
+  // Phase 2 (COMMIT) instructions
+  repeated SettlementInstruction instructions = 4;
+
+  // Partial settlement metadata (if some banks failed)
+  repeated AtomicComponent atomic_components = 5;
+  repeated string requeued_payments = 6;  // Payment IDs moved to next cycle
+
+  // Coordinator
+  string coordinator_id = 7;       // Which validator initiated finalization
+  google.protobuf.Timestamp finalized_at = 8;
+}
+
+// SettlementInstruction (actual wire transfer command)
+message SettlementInstruction {
+  string instruction_id = 1;
+  string from_bank = 2;
+  string to_bank = 3;
+  string amount = 4;
+  string currency = 5;
+
+  // ISO 20022 pacs.008
+  bytes iso20022_pacs008 = 6;
+
+  // Execution
+  InstructionStatus status = 7;
+  google.protobuf.Timestamp executed_at = 8;
+}
+
+enum InstructionStatus {
+  INSTRUCTION_STATUS_UNSPECIFIED = 0;
+  INSTRUCTION_STATUS_PENDING = 1;
+  INSTRUCTION_STATUS_EXECUTED = 2;
+  INSTRUCTION_STATUS_FAILED = 3;
+  INSTRUCTION_STATUS_TIMEOUT = 4;
+}
+
+// AtomicComponent (strongly connected subgraph for partial settlement)
+message AtomicComponent {
+  string component_id = 1;
+  repeated string bank_ids = 2;         // Banks in this component
+  repeated NetTransfer net_transfers = 3;
+  string total_amount = 4;
+  bool finalized = 5;                   // True if this component settled
+}
+
+// =========================================================================
+// SETTLEMENT_PROOF (Protocol Message 4)
+// =========================================================================
+
+// SettlementProof provides cryptographic evidence of finalization
+message SettlementProof {
+  // Proof metadata
+  string proof_id = 1;             // UUIDv7
+  string batch_id = 2;
+  uint64 checkpoint_height = 3;    // CometBFT block height
+
+  // Merkle proofs
+  bytes merkle_root = 4;           // Root of ledger entries
+  repeated MerkleProofPath merkle_paths = 5;  // Individual payment proofs
+
+  // Consensus commitment
+  bytes app_hash = 6;              // CometBFT app state hash
+  bytes prev_checkpoint_id = 7;    // Previous checkpoint for chaining
+
+  // Network and protocol version
+  string network_id = 8;
+  uint32 proto_version = 9;
+
+  // Timestamps
+  google.protobuf.Timestamp batch_finalized_at = 10;
+  google.protobuf.Timestamp proof_generated_at = 11;
+
+  // Multi-signature (BFT validators)
+  repeated ValidatorSignature validator_signatures = 12;  // >= 5 of 7
+
+  // HSM coordinator signature (FINAL SEAL)
+  HsmSignature hsm_signature = 13;
+
+  // Batch summary
+  BatchSummary summary = 14;
+
+  // ACL metadata (who can access this proof)
+  repeated string authorized_parties = 15;  // BIC/LEI or reg_id
+}
+
+// MerkleProofPath for individual payment verification
+message MerkleProofPath {
+  string payment_id = 1;
+  bytes leaf_hash = 2;
+  repeated bytes sibling_hashes = 3;  // Path from leaf to root
+  uint32 leaf_index = 4;
+}
+
+// ValidatorSignature (BFT consensus)
+message ValidatorSignature {
+  string validator_id = 1;         // Validator public key or name
+  bytes public_key = 2;            // Ed25519 public key
+  bytes signature = 3;             // Ed25519 signature
+  google.protobuf.Timestamp signed_at = 4;
+}
+
+// HsmSignature (HSM coordinator final seal)
+message HsmSignature {
+  string hsm_key_id = 1;           // HSM key identifier
+  string key_epoch = 2;            // Key rotation epoch (e.g., "2025-Q3")
+  SignatureAlgorithm algorithm = 3;
+  bytes signature = 4;
+  bytes public_key = 5;            // For verification
+  google.protobuf.Timestamp signed_at = 6;
+}
+
+enum SignatureAlgorithm {
+  SIGNATURE_ALGORITHM_UNSPECIFIED = 0;
+  SIGNATURE_ALGORITHM_ED25519 = 1;
+  SIGNATURE_ALGORITHM_ECDSA_P256 = 2;
+  SIGNATURE_ALGORITHM_RSA_PSS_4096 = 3;
+}
+
+// BatchSummary (human-readable summary)
+message BatchSummary {
+  string corridor_id = 1;
+  string currency = 2;
+  int32 payment_count = 3;
+  int32 bank_count = 4;
+  string gross_amount = 5;
+  string net_amount = 6;
+  float netting_efficiency = 7;
+  int32 net_transfer_count = 8;
+  bool partial_settlement = 9;
+  int32 requeued_count = 10;
+}
+
+// =========================================================================
+// CHECKPOINT (Periodic state commitment)
+// =========================================================================
+
+// Checkpoint commits ledger state every ~100 blocks (~10 minutes)
+message Checkpoint {
+  // Checkpoint metadata
+  string checkpoint_id = 1;        // SHA3-256 hash of checkpoint
+  uint64 height = 2;               // CometBFT block height
+  bytes prev_checkpoint_id = 3;    // Previous checkpoint (chaining)
+
+  // State commitments
+  bytes app_hash = 4;              // CometBFT application state
+  bytes merkle_root = 5;           // Ledger Merkle root (all entries)
+
+  // Network metadata
+  string network_id = 6;
+  uint32 proto_version = 7;
+
+  // Timestamp
+  google.protobuf.Timestamp timestamp = 8;
+
+  // Multi-signature (BFT validators >= 2/3)
+  repeated ValidatorSignature validator_signatures = 9;
+
+  // HSM signature (final seal)
+  HsmSignature hsm_signature = 10;
+
+  // Stats (for observability)
+  CheckpointStats stats = 11;
+}
+
+// CheckpointStats (metrics for monitoring)
+message CheckpointStats {
+  uint64 total_payments = 1;       // Total payments since genesis
+  uint64 total_batches = 2;        // Total settlement batches
+  string total_volume = 3;         // Cumulative volume
+  int32 active_corridors = 4;
+  int32 active_banks = 5;
+}
+
+// =========================================================================
+// PROTOCOL SERVICE (gRPC API)
+// =========================================================================
+
+service ProtocolService {
+  // Send payment instruction (banks/PSPs only)
+  rpc InstructPayment(InstructPaymentRequest) returns (InstructPaymentResponse);
+
+  // Confirm netting proposal (banks only)
+  rpc ConfirmNetting(ConfirmNettingRequest) returns (ConfirmNettingResponse);
+
+  // Get settlement proof (authorized parties only)
+  rpc GetSettlementProof(GetSettlementProofRequest) returns (GetSettlementProofResponse);
+
+  // Get checkpoint (public, for verification)
+  rpc GetCheckpoint(GetCheckpointRequest) returns (GetCheckpointResponse);
+
+  // Verify proof offline (utility)
+  rpc VerifyProof(VerifyProofRequest) returns (VerifyProofResponse);
+}
+
+// Request/Response wrappers
+message InstructPaymentRequest {
+  InstructPayment instruction = 1;
+}
+
+message InstructPaymentResponse {
+  string payment_id = 1;
+  ProtocolState state = 2;
+  string trace_id = 3;
+  google.protobuf.Timestamp accepted_at = 4;
+}
+
+message ConfirmNettingRequest {
+  BankConfirmation confirmation = 1;
+}
+
+message ConfirmNettingResponse {
+  string batch_id = 1;
+  bool finalization_triggered = 2;  // True if this ACK completed quorum
+  google.protobuf.Timestamp confirmed_at = 3;
+}
+
+message GetSettlementProofRequest {
+  string batch_id = 1;
+  string requester_id = 2;         // BIC/LEI or reg_id for ACL check
+}
+
+message GetSettlementProofResponse {
+  SettlementProof proof = 1;
+  ProofFormat format = 2;          // Binary protobuf or JSON
+}
+
+enum ProofFormat {
+  PROOF_FORMAT_UNSPECIFIED = 0;
+  PROOF_FORMAT_PROTOBUF = 1;       // Official canonical format
+  PROOF_FORMAT_JSON = 2;           // Human-readable (for regulators)
+}
+
+message GetCheckpointRequest {
+  uint64 height = 1;               // Block height (0 = latest)
+}
+
+message GetCheckpointResponse {
+  Checkpoint checkpoint = 1;
+}
+
+message VerifyProofRequest {
+  SettlementProof proof = 1;
+  bytes expected_merkle_root = 2;  // Optional, for extra validation
+}
+
+message VerifyProofResponse {
+  bool valid = 1;
+  string error = 2;                // If invalid, reason
+  VerificationDetails details = 3;
+}
+
+message VerificationDetails {
+  bool merkle_valid = 1;
+  bool validator_signatures_valid = 2;
+  bool hsm_signature_valid = 3;
+  int32 validator_quorum_met = 4;  // How many validators signed
+  int32 validator_quorum_required = 5;
+}

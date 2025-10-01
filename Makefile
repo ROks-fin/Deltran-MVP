@@ -8,9 +8,9 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # Infrastructure commands
-up: ## Start all services with Docker Compose
+up: ## Start all services with Docker Compose (3 ledger instances)
 	@echo "🚀 Starting DelTran Rail MVP..."
-	docker-compose up -d
+	docker compose up -d --scale ledger=3
 	@echo "✅ Services started successfully"
 	@echo "   Gateway:    http://localhost:8000"
 	@echo "   Grafana:    http://localhost:3000 (admin/admin)"
@@ -19,25 +19,31 @@ up: ## Start all services with Docker Compose
 
 down: ## Stop all services
 	@echo "🛑 Stopping DelTran Rail MVP..."
-	docker-compose down
+	docker compose down -v
 	@echo "✅ Services stopped"
+
+reup: down up ## Restart all services (down + up)
 
 build: ## Build all Docker images
 	@echo "🔨 Building Docker images..."
-	docker-compose build --parallel
+	docker compose build
 	@echo "✅ Build complete"
 
 logs: ## Show logs from all services
-	docker-compose logs -f
+	docker compose logs -f --tail=200
+
+ps: ## Show status of all services
+	@echo "📊 Service Status:"
+	@docker compose ps
 
 restart: ## Restart all services
 	@echo "🔄 Restarting services..."
-	docker-compose restart
+	docker compose restart
 	@echo "✅ Services restarted"
 
 status: ## Show status of all services
 	@echo "📊 Service Status:"
-	@docker-compose ps
+	@docker compose ps
 	@echo ""
 	@echo "🏥 Health Checks:"
 	@curl -s http://localhost:8000/health | jq -r '.status // "❌ Gateway not responding"' || echo "❌ Gateway not responding"
@@ -47,10 +53,12 @@ status: ## Show status of all services
 db-shell: ## Connect to PostgreSQL shell
 	docker-compose exec postgres psql -U deltran -d deltran
 
-db-migrate: ## Run database migrations
+migrate: ## Run database migrations
 	@echo "🗄️  Running database migrations..."
 	docker-compose exec postgres psql -U deltran -d deltran -f /docker-entrypoint-initdb.d/001_initial_schema.sql
 	@echo "✅ Migrations complete"
+
+db-migrate: migrate ## Alias for migrate
 
 db-reset: ## Reset database (WARNING: destroys all data)
 	@echo "⚠️  WARNING: This will destroy all data!"

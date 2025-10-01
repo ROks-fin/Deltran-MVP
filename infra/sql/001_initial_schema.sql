@@ -44,7 +44,7 @@ CREATE TABLE payments (
 -- Settlement batches
 CREATE TABLE settlement_batches (
     batch_id UUID PRIMARY KEY,
-    window VARCHAR(20) NOT NULL,
+    batch_window VARCHAR(20) NOT NULL,
     total_transactions INTEGER NOT NULL DEFAULT 0,
     total_amount DECIMAL(20,2) NOT NULL DEFAULT 0,
     net_positions JSONB,
@@ -52,7 +52,7 @@ CREATE TABLE settlement_batches (
     closed_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
-    CONSTRAINT valid_window CHECK (window IN ('intraday', 'EOD')),
+    CONSTRAINT valid_batch_window CHECK (batch_window IN ('intraday', 'EOD')),
     CONSTRAINT valid_status CHECK (status IN ('OPEN', 'CLOSED', 'SETTLED'))
 );
 
@@ -221,7 +221,7 @@ CREATE INDEX idx_payments_creditor_account ON payments(creditor_account);
 CREATE INDEX idx_payments_settlement_batch ON payments(settlement_batch_id);
 CREATE INDEX idx_payments_trace_id ON payments(trace_id);
 
-CREATE INDEX idx_settlement_batches_window ON settlement_batches(window);
+CREATE INDEX idx_settlement_batches_batch_window ON settlement_batches(batch_window);
 CREATE INDEX idx_settlement_batches_closed_at ON settlement_batches(closed_at);
 CREATE INDEX idx_settlement_batches_status ON settlement_batches(status);
 

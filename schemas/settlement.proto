@@ -1,0 +1,253 @@
+syntax = "proto3";
+
+package deltran.settlement.v1;
+
+option go_package = "github.com/deltran/pb/settlement/v1;settlementv1";
+
+import "google/protobuf/timestamp.proto";
+
+// SettlementService manages batch netting and finalization
+service SettlementService {
+  // Submit instruction for settlement
+  rpc SubmitInstruction(SubmitInstructionRequest) returns (SubmitInstructionResponse);
+
+  // Trigger immediate settlement for a window
+  rpc TriggerSettlement(TriggerSettlementRequest) returns (TriggerSettlementResponse);
+
+  // Get netting cycle details
+  rpc GetNettingCycle(GetNettingCycleRequest) returns (GetNettingCycleResponse);
+
+  // Get pending instructions
+  rpc GetPendingInstructions(GetPendingInstructionsRequest) returns (GetPendingInstructionsResponse);
+
+  // Get settlement proof
+  rpc GetSettlementProof(GetSettlementProofRequest) returns (GetSettlementProofResponse);
+
+  // Get settlement statistics
+  rpc GetSettlementStats(GetSettlementStatsRequest) returns (GetSettlementStatsResponse);
+}
+
+// SubmitInstructionRequest adds payment to settlement queue
+message SubmitInstructionRequest {
+  string payment_id = 1;
+  string amount = 2;
+  string currency = 3;
+  string debtor_account = 4;
+  string creditor_account = 5;
+  SettlementWindow settlement_window = 6;
+  google.protobuf.Timestamp value_date = 7;
+}
+
+// SubmitInstructionResponse confirms submission
+message SubmitInstructionResponse {
+  string instruction_id = 1;
+  string payment_id = 2;
+  SettlementWindow settlement_window = 3;
+  google.protobuf.Timestamp estimated_settlement_time = 4;
+}
+
+// TriggerSettlementRequest forces immediate settlement
+message TriggerSettlementRequest {
+  SettlementWindow window = 1;
+  string currency = 2;
+  string reason = 3; // Manual trigger reason
+}
+
+// TriggerSettlementResponse returns cycle info
+message TriggerSettlementResponse {
+  string cycle_id = 1;
+  int32 instructions_processed = 2;
+  int32 positions_created = 3;
+  int32 optimized_flows = 4;
+  string gross_amount = 5;
+  string net_amount = 6;
+  float netting_efficiency = 7; // 0.0-1.0
+  google.protobuf.Timestamp settled_at = 8;
+}
+
+// GetNettingCycleRequest queries cycle details
+message GetNettingCycleRequest {
+  string cycle_id = 1;
+}
+
+// GetNettingCycleResponse returns cycle data
+message GetNettingCycleResponse {
+  NettingCycle cycle = 1;
+}
+
+// NettingCycle represents a settlement batch
+message NettingCycle {
+  string cycle_id = 1;
+  SettlementWindow window = 2;
+  string currency = 3;
+  CycleStatus status = 4;
+
+  // Timing
+  google.protobuf.Timestamp window_start = 5;
+  google.protobuf.Timestamp window_end = 6;
+  google.protobuf.Timestamp settlement_time = 7;
+
+  // Netting results
+  repeated NettingPosition positions = 8;
+  repeated OptimizedFlow optimized_flows = 9;
+
+  // Metrics
+  int32 instruction_count = 10;
+  string gross_amount = 11;
+  string net_amount = 12;
+  float netting_efficiency = 13;
+
+  // Proof
+  SettlementProof proof = 14;
+}
+
+// SettlementWindow defines batch timing
+enum SettlementWindow {
+  SETTLEMENT_WINDOW_UNSPECIFIED = 0;
+  SETTLEMENT_WINDOW_15MIN = 1;
+  SETTLEMENT_WINDOW_30MIN = 2;
+  SETTLEMENT_WINDOW_60MIN = 3;
+  SETTLEMENT_WINDOW_EOD = 4;    // End of day
+  SETTLEMENT_WINDOW_INSTANT = 5; // Real-time (no netting)
+}
+
+// CycleStatus tracks netting lifecycle
+enum CycleStatus {
+  CYCLE_STATUS_UNSPECIFIED = 0;
+  CYCLE_STATUS_OPEN = 1;          // Accepting instructions
+  CYCLE_STATUS_CLOSED = 2;        // Window closed, processing
+  CYCLE_STATUS_NETTED = 3;        // Netting complete
+  CYCLE_STATUS_OPTIMIZED = 4;     // Min-cost flow done
+  CYCLE_STATUS_SETTLED = 5;       // Final settlement
+  CYCLE_STATUS_FINALIZED = 6;     // Proof generated
+  CYCLE_STATUS_FAILED = 7;
+}
+
+// NettingPosition represents net obligation
+message NettingPosition {
+  string position_id = 1;
+  string participant = 2;
+  string currency = 3;
+  string gross_debit = 4;
+  string gross_credit = 5;
+  string net_position = 6;  // Positive = owe, Negative = receive
+  int32 instruction_count = 7;
+}
+
+// OptimizedFlow represents min-cost settlement flow
+message OptimizedFlow {
+  string flow_id = 1;
+  string from_participant = 2;
+  string to_participant = 3;
+  string amount = 4;
+  string currency = 5;
+  int32 hops = 6; // For routing cost calculation
+  string cost = 7; // Routing cost
+}
+
+// GetPendingInstructionsRequest queries queue
+message GetPendingInstructionsRequest {
+  SettlementWindow window = 1;
+  string currency = 2;
+
+  // Pagination
+  int32 offset = 3;
+  int32 limit = 4;
+}
+
+// GetPendingInstructionsResponse returns pending items
+message GetPendingInstructionsResponse {
+  repeated PaymentInstruction instructions = 1;
+  int32 total_count = 2;
+  string total_amount = 3;
+}
+
+// PaymentInstruction for settlement
+message PaymentInstruction {
+  string instruction_id = 1;
+  string payment_id = 2;
+  string amount = 3;
+  string currency = 4;
+  string debtor = 5;
+  string creditor = 6;
+  SettlementWindow window = 7;
+  google.protobuf.Timestamp submitted_at = 8;
+}
+
+// GetSettlementProofRequest queries proof
+message GetSettlementProofRequest {
+  string cycle_id = 1;
+}
+
+// GetSettlementProofResponse returns cryptographic proof
+message GetSettlementProofResponse {
+  SettlementProof proof = 1;
+}
+
+// SettlementProof provides cryptographic evidence
+message SettlementProof {
+  string proof_id = 1;
+  string cycle_id = 2;
+  google.protobuf.Timestamp generated_at = 3;
+
+  // Merkle proofs
+  bytes pre_settlement_merkle_root = 4;
+  bytes post_settlement_merkle_root = 5;
+
+  // Account balance proofs
+  repeated AccountBalanceProof account_proofs = 6;
+
+  // Digital signature (Ed25519 or RSA)
+  bytes signature = 7;
+  bytes signing_public_key = 8;
+
+  // Institution metadata
+  string institution_name = 9;
+  string regulator = 10; // "FSRA", "FIU", etc.
+}
+
+// AccountBalanceProof proves balance at settlement
+message AccountBalanceProof {
+  string account_id = 1;
+  string pre_balance = 2;
+  string post_balance = 3;
+  string net_change = 4;
+  bytes merkle_proof = 5; // Merkle proof of inclusion
+}
+
+// GetSettlementStatsRequest queries statistics
+message GetSettlementStatsRequest {
+  // Optional: filter by window/currency
+  SettlementWindow window = 1;
+  string currency = 2;
+
+  // Time range
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+}
+
+// GetSettlementStatsResponse returns metrics
+message GetSettlementStatsResponse {
+  int64 total_cycles = 1;
+  int64 total_instructions = 2;
+  string total_gross_amount = 3;
+  string total_net_amount = 4;
+  float average_netting_efficiency = 5;
+
+  // Performance metrics
+  int64 p50_cycle_duration_ms = 6;
+  int64 p95_cycle_duration_ms = 7;
+  int64 p99_cycle_duration_ms = 8;
+
+  // Per-window breakdown
+  map<string, WindowStats> window_stats = 9;
+}
+
+// WindowStats per settlement window
+message WindowStats {
+  int64 cycle_count = 1;
+  int64 instruction_count = 2;
+  string gross_amount = 3;
+  string net_amount = 4;
+  float netting_efficiency = 5;
+}

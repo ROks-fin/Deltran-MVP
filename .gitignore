@@ -1,0 +1,20 @@
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+*.log
+artifacts/
+.DS_Store
+*.swp
+*.swo
+*~
+.env
+.env.local
+
+# Rust
+target/
+Cargo.lock
+*.exe
+
+# Node
+node_modules/

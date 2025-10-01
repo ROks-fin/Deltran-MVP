@@ -1,0 +1,510 @@
+syntax = "proto3";
+
+package deltran.compliance.v1;
+
+option go_package = "github.com/deltran/pb/compliance/v1;compliancev1";
+
+import "google/protobuf/timestamp.proto";
+
+// ComplianceService handles sanctions, AML, Travel Rule
+service ComplianceService {
+  // Screen payment for sanctions/AML (async, fail-closed)
+  rpc ScreenPayment(ScreenPaymentRequest) returns (ScreenPaymentResponse);
+
+  // Get async screening result
+  rpc GetScreeningResult(GetScreeningResultRequest) returns (ScreenPaymentResponse);
+
+  // Check Travel Rule requirements
+  rpc CheckTravelRule(CheckTravelRuleRequest) returns (CheckTravelRuleResponse);
+
+  // Submit Suspicious Transaction Report (STR)
+  rpc SubmitSTR(SubmitSTRRequest) returns (SubmitSTRResponse);
+
+  // Generate regulatory report
+  rpc GenerateReport(GenerateReportRequest) returns (GenerateReportResponse);
+
+  // Get compliance statistics
+  rpc GetComplianceStats(GetComplianceStatsRequest) returns (GetComplianceStatsResponse);
+
+  // Sanctions list management
+  rpc UpdateSanctionsList(UpdateSanctionsListRequest) returns (UpdateSanctionsListResponse);
+  rpc SearchSanctionsList(SearchSanctionsListRequest) returns (SearchSanctionsListResponse);
+}
+
+// RegulatoryReadOnlyService - Read-only API for regulators (FSRA, UAE FIU)
+service RegulatoryReadOnlyService {
+  // Get payment details
+  rpc GetPayment(GetPaymentRequest) returns (GetPaymentResponse);
+
+  // Get screening details
+  rpc GetScreening(GetScreeningRequest) returns (GetScreeningResponse);
+
+  // Get STR details
+  rpc GetSTR(GetSTRRequest) returns (GetSTRResponse);
+
+  // Search payments by criteria
+  rpc SearchPayments(SearchPaymentsRequest) returns (SearchPaymentsResponse);
+
+  // Get institution statistics
+  rpc GetInstitutionStats(GetInstitutionStatsRequest) returns (GetInstitutionStatsResponse);
+
+  // Audit trail
+  rpc GetAuditTrail(GetAuditTrailRequest) returns (GetAuditTrailResponse);
+}
+
+// ScreenPaymentRequest checks sanctions/PEP
+message ScreenPaymentRequest {
+  string payment_id = 1;
+  string amount = 2;
+  string currency = 3;
+
+  // Debtor info
+  string debtor_name = 4;
+  string debtor_account = 5;
+  string debtor_country = 6;
+  Address debtor_address = 7;
+
+  // Creditor info
+  string creditor_name = 8;
+  string creditor_account = 9;
+  string creditor_country = 10;
+  Address creditor_address = 11;
+
+  // Purpose
+  string purpose = 12;
+
+  // Screening options
+  bool async_mode = 13; // true = return immediately with PENDING status
+  int32 timeout_ms = 14; // max wait for sync mode (default 500ms)
+}
+
+// GetScreeningResultRequest for async polling
+message GetScreeningResultRequest {
+  string screening_id = 1;
+}
+
+// ScreenPaymentResponse returns screening result
+message ScreenPaymentResponse {
+  string screening_id = 1;
+  string payment_id = 2;
+  ScreeningResult result = 3;
+  repeated ScreeningHit hits = 4;
+  google.protobuf.Timestamp screened_at = 5;
+  ScreeningStatus status = 6; // for async mode
+  int32 processing_duration_ms = 7;
+}
+
+// ScreeningStatus for async operations
+enum ScreeningStatus {
+  SCREENING_STATUS_UNSPECIFIED = 0;
+  SCREENING_STATUS_PENDING = 1;    // Still processing
+  SCREENING_STATUS_COMPLETED = 2;  // Done
+  SCREENING_STATUS_FAILED = 3;     // Error occurred
+  SCREENING_STATUS_TIMEOUT = 4;    // Processing took too long
+}
+
+// ScreeningResult outcome
+enum ScreeningResult {
+  SCREENING_RESULT_UNSPECIFIED = 0;
+  SCREENING_RESULT_CLEAR = 1;           // No hits, proceed
+  SCREENING_RESULT_HIT = 2;             // Match found, investigate
+  SCREENING_RESULT_FALSE_POSITIVE = 3;  // Hit but cleared
+  SCREENING_RESULT_BLOCKED = 4;         // Blocked by sanctions
+  SCREENING_RESULT_PENDING = 5;         // Still processing (async)
+}
+
+// ScreeningHit details
+message ScreeningHit {
+  string hit_id = 1;
+  string list_name = 2; // "OFAC SDN", "UN Consolidated", "EU Sanctions", etc.
+  string list_source = 3; // "US", "UN", "EU"
+  string entity_name = 4;
+  float match_score = 5; // 0.0-1.0 confidence
+  string match_reason = 6;
+  HitType hit_type = 7;
+  string country = 8;
+  repeated string aka_names = 9; // Also known as
+  string list_date = 10; // When added to list
+  string entity_type = 11; // "individual", "entity", "vessel", "aircraft"
+  string program = 12; // "SDGT", "UKRAINE", "IRAN", etc.
+  map<string, string> additional_info = 13;
+}
+
+// HitType categorization
+enum HitType {
+  HIT_TYPE_UNSPECIFIED = 0;
+  HIT_TYPE_SANCTIONS = 1;     // Sanctions list
+  HIT_TYPE_PEP = 2;           // Politically Exposed Person
+  HIT_TYPE_ADVERSE_MEDIA = 3; // Negative news
+  HIT_TYPE_HIGH_RISK = 4;     // High-risk jurisdiction
+}
+
+// Address for compliance checks
+message Address {
+  string address_line_1 = 1;
+  string address_line_2 = 2;
+  string city = 3;
+  string postal_code = 4;
+  string country_code = 5; // ISO 3166-1 alpha-2
+}
+
+// CheckTravelRuleRequest validates FATF compliance
+message CheckTravelRuleRequest {
+  string payment_id = 1;
+  string amount = 2;
+  string currency = 3;
+
+  // Originator (debtor) info
+  TravelRuleEntity originator = 4;
+
+  // Beneficiary (creditor) info
+  TravelRuleEntity beneficiary = 5;
+}
+
+// CheckTravelRuleResponse returns compliance status
+message CheckTravelRuleResponse {
+  string check_id = 1;
+  bool compliant = 2;
+  repeated string missing_fields = 3;
+  string threshold_applicable = 4; // "USD 1000", "EUR 1000", etc.
+  google.protobuf.Timestamp checked_at = 5;
+}
+
+// TravelRuleEntity (originator or beneficiary)
+message TravelRuleEntity {
+  string name = 1;
+  string account_number = 2;
+  Address address = 3;
+  string identification_type = 4; // "passport", "national_id", etc.
+  string identification_number = 5;
+  string date_of_birth = 6;       // YYYY-MM-DD
+  string country_of_birth = 7;
+  string nationality = 8;
+}
+
+// SubmitSTRRequest files suspicious transaction report
+message SubmitSTRRequest {
+  string payment_id = 1;
+  repeated string related_payment_ids = 2;
+
+  // Reporter info
+  string institution_name = 3;
+  string reporter_name = 4;
+  string reporter_title = 5;
+
+  // Suspicious activity
+  string narrative = 6;
+  repeated string indicators = 7; // "structuring", "unusual_pattern", etc.
+  string amount_involved = 8;
+  google.protobuf.Timestamp activity_start_date = 9;
+  google.protobuf.Timestamp activity_end_date = 10;
+
+  // Filing info
+  string filing_institution_reference = 11;
+  google.protobuf.Timestamp filing_date = 12;
+}
+
+// SubmitSTRResponse confirms submission
+message SubmitSTRResponse {
+  string str_id = 1;
+  string filing_reference = 2;
+  STRStatus status = 3;
+  google.protobuf.Timestamp submitted_at = 4;
+  string regulator_reference = 5; // Reference from FIU/FinCEN
+}
+
+// STRStatus tracks lifecycle
+enum STRStatus {
+  STR_STATUS_UNSPECIFIED = 0;
+  STR_STATUS_DRAFT = 1;
+  STR_STATUS_PENDING_REVIEW = 2;
+  STR_STATUS_APPROVED = 3;
+  STR_STATUS_SUBMITTED = 4;
+  STR_STATUS_ACKNOWLEDGED = 5;
+  STR_STATUS_REJECTED = 6;
+}
+
+// GenerateReportRequest creates regulatory report
+message GenerateReportRequest {
+  ReportType report_type = 1;
+  string format = 2; // "xlsx", "xml", "pdf"
+
+  // Time period
+  google.protobuf.Timestamp start_date = 3;
+  google.protobuf.Timestamp end_date = 4;
+
+  // Filters
+  string currency = 5;
+  string country = 6;
+}
+
+// GenerateReportResponse returns report
+message GenerateReportResponse {
+  string report_id = 1;
+  ReportType report_type = 2;
+  string format = 3;
+  bytes report_data = 4; // Binary report (Excel, PDF, etc.)
+  string download_url = 5; // S3/signed URL
+  google.protobuf.Timestamp generated_at = 6;
+  ReportStatus status = 7;
+}
+
+// ReportType defines regulatory reports
+enum ReportType {
+  REPORT_TYPE_UNSPECIFIED = 0;
+  REPORT_TYPE_AML_ANNUAL = 1;        // UAE FIU Annual Return
+  REPORT_TYPE_PRU_MONTHLY = 2;       // FSRA Prudential Returns
+  REPORT_TYPE_SAFEGUARDING = 3;      // Client money safeguarding
+  REPORT_TYPE_PAYMENT_STATS = 4;     // Payment statistics (quarterly)
+  REPORT_TYPE_CTR = 5;               // Currency Transaction Report
+  REPORT_TYPE_TECH_RISK = 6;         // Technology risk report
+  REPORT_TYPE_MODEL_VALIDATION = 7;  // Risk model validation
+}
+
+// ReportStatus tracks generation
+enum ReportStatus {
+  REPORT_STATUS_UNSPECIFIED = 0;
+  REPORT_STATUS_GENERATING = 1;
+  REPORT_STATUS_READY = 2;
+  REPORT_STATUS_APPROVED = 3;
+  REPORT_STATUS_SUBMITTED = 4;
+  REPORT_STATUS_FAILED = 5;
+}
+
+// GetComplianceStatsRequest queries statistics
+message GetComplianceStatsRequest {
+  google.protobuf.Timestamp start_date = 1;
+  google.protobuf.Timestamp end_date = 2;
+}
+
+// GetComplianceStatsResponse returns metrics
+message GetComplianceStatsResponse {
+  // Screening stats
+  int64 total_screenings = 1;
+  int64 screening_hits = 2;
+  int64 screening_blocks = 3;
+  int64 false_positives = 4;
+
+  // STR stats
+  int64 strs_filed = 5;
+  int64 strs_pending = 6;
+
+  // Travel Rule stats
+  int64 travel_rule_checks = 7;
+  int64 travel_rule_violations = 8;
+
+  // Report stats
+  map<string, int64> reports_generated = 9; // report_type -> count
+
+  // Performance
+  int64 p95_screening_duration_ms = 10;
+  int64 p99_screening_duration_ms = 11;
+}
+
+// UpdateSanctionsListRequest - Update sanctions lists (OFAC/UN/EU)
+message UpdateSanctionsListRequest {
+  string list_source = 1; // "OFAC", "UN", "EU", "UK"
+  string list_name = 2; // "SDN", "Consolidated", etc.
+  repeated SanctionEntry entries = 3;
+  google.protobuf.Timestamp effective_date = 4;
+  string version = 5;
+}
+
+// UpdateSanctionsListResponse
+message UpdateSanctionsListResponse {
+  bool success = 1;
+  int32 entries_added = 2;
+  int32 entries_updated = 3;
+  int32 entries_removed = 4;
+  google.protobuf.Timestamp processed_at = 5;
+}
+
+// SanctionEntry - Individual sanctioned entity
+message SanctionEntry {
+  string entry_id = 1; // Unique ID from source list
+  string entity_name = 2;
+  string entity_type = 3; // "individual", "entity", "vessel", "aircraft"
+  repeated string aka_names = 4;
+  repeated Address addresses = 5;
+  repeated string nationalities = 6;
+  repeated string dates_of_birth = 7;
+  repeated string passports = 8;
+  repeated string identification_numbers = 9;
+  string program = 10; // "SDGT", "UKRAINE", "IRAN", etc.
+  string list_date = 11; // When added
+  string remarks = 12;
+  map<string, string> metadata = 13;
+  SanctionAction action = 14; // ADD, UPDATE, DELETE
+}
+
+// SanctionAction
+enum SanctionAction {
+  SANCTION_ACTION_UNSPECIFIED = 0;
+  SANCTION_ACTION_ADD = 1;
+  SANCTION_ACTION_UPDATE = 2;
+  SANCTION_ACTION_DELETE = 3;
+}
+
+// SearchSanctionsListRequest - Search sanctions lists
+message SearchSanctionsListRequest {
+  string query = 1; // Name to search
+  repeated string list_sources = 2; // ["OFAC", "UN", "EU"]
+  float min_score = 3; // Minimum match score (0.0-1.0)
+  int32 max_results = 4; // Limit results
+}
+
+// SearchSanctionsListResponse
+message SearchSanctionsListResponse {
+  repeated SanctionSearchHit hits = 5;
+  int32 total_hits = 6;
+}
+
+// SanctionSearchHit
+message SanctionSearchHit {
+  string entry_id = 1;
+  string list_source = 2;
+  string list_name = 3;
+  SanctionEntry entry = 4;
+  float match_score = 5;
+  string match_reason = 6;
+}
+
+// ============== Regulatory Read-Only API Messages ==============
+
+// GetPaymentRequest
+message GetPaymentRequest {
+  string payment_id = 1;
+  string regulator_id = 2; // Authenticated regulator
+}
+
+// GetPaymentResponse
+message GetPaymentResponse {
+  string payment_id = 1;
+  string amount = 2;
+  string currency = 3;
+  google.protobuf.Timestamp created_at = 4;
+  string status = 5;
+
+  // Party details
+  PartyDetails debtor = 6;
+  PartyDetails creditor = 7;
+
+  // Compliance details
+  string screening_id = 8;
+  ScreeningResult screening_result = 9;
+  bool travel_rule_compliant = 10;
+
+  // Risk
+  string risk_score = 11;
+  string risk_level = 12;
+}
+
+// PartyDetails for regulatory reporting
+message PartyDetails {
+  string name = 1;
+  string account = 2;
+  Address address = 3;
+  string country = 4;
+  string identification = 5;
+}
+
+// GetScreeningRequest
+message GetScreeningRequest {
+  string screening_id = 1;
+  string regulator_id = 2;
+}
+
+// GetScreeningResponse
+message GetScreeningResponse {
+  string screening_id = 1;
+  string payment_id = 2;
+  ScreeningResult result = 3;
+  repeated ScreeningHit hits = 4;
+  google.protobuf.Timestamp screened_at = 5;
+  string screened_by = 6;
+  repeated string actions_taken = 7;
+}
+
+// GetSTRRequest
+message GetSTRRequest {
+  string str_id = 1;
+  string regulator_id = 2;
+}
+
+// GetSTRResponse
+message GetSTRResponse {
+  string str_id = 1;
+  repeated string payment_ids = 2;
+  string narrative = 3;
+  repeated string indicators = 4;
+  google.protobuf.Timestamp filed_at = 5;
+  string reporter_name = 6;
+  STRStatus status = 7;
+}
+
+// SearchPaymentsRequest
+message SearchPaymentsRequest {
+  string regulator_id = 1;
+
+  // Filters
+  google.protobuf.Timestamp start_date = 2;
+  google.protobuf.Timestamp end_date = 3;
+  string currency = 4;
+  string country = 5;
+  string min_amount = 6;
+  string max_amount = 7;
+  ScreeningResult screening_result = 8;
+
+  // Pagination
+  int32 page = 9;
+  int32 page_size = 10;
+}
+
+// SearchPaymentsResponse
+message SearchPaymentsResponse {
+  repeated GetPaymentResponse payments = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+// GetInstitutionStatsRequest
+message GetInstitutionStatsRequest {
+  string regulator_id = 1;
+  google.protobuf.Timestamp start_date = 2;
+  google.protobuf.Timestamp end_date = 3;
+}
+
+// GetInstitutionStatsResponse
+message GetInstitutionStatsResponse {
+  int64 total_payments = 1;
+  string total_volume = 2;
+  int64 screenings_performed = 3;
+  int64 hits_identified = 4;
+  int64 payments_blocked = 5;
+  int64 strs_filed = 6;
+  map<string, int64> payments_by_currency = 7;
+  map<string, int64> payments_by_country = 8;
+}
+
+// GetAuditTrailRequest
+message GetAuditTrailRequest {
+  string regulator_id = 1;
+  string entity_id = 2; // payment_id, screening_id, etc.
+  string entity_type = 3; // "payment", "screening", "str"
+}
+
+// GetAuditTrailResponse
+message GetAuditTrailResponse {
+  repeated AuditEvent events = 1;
+}
+
+// AuditEvent
+message AuditEvent {
+  string event_id = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string action = 3; // "created", "updated", "screened", etc.
+  string actor = 4; // User/system
+  map<string, string> changes = 5;
+  string ip_address = 6;
+}

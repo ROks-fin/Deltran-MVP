@@ -1,0 +1,206 @@
+syntax = "proto3";
+
+package deltran.payment.v1;
+
+option go_package = "github.com/deltran/pb/payment/v1;paymentv1";
+
+import "google/protobuf/timestamp.proto";
+
+// Payment represents a cross-border payment instruction
+message Payment {
+  // Unique payment identifier (UUIDv7)
+  string payment_id = 1;
+
+  // Unique end-to-end transaction reference (UUIDv4 or UETR)
+  string uetr = 2;
+
+  // Payment amount (string to preserve precision, e.g., "1000.50")
+  string amount = 3;
+
+  // ISO 4217 currency code (USD, EUR, AED, etc.)
+  string currency = 4;
+
+  // Debtor (sender) information
+  Account debtor = 5;
+
+  // Creditor (receiver) information
+  Account creditor = 6;
+
+  // Payment purpose code (ISO 20022)
+  string purpose = 7;
+
+  // Settlement method
+  SettlementMethod settlement_method = 8;
+
+  // Current payment status
+  PaymentStatus status = 9;
+
+  // Payment timestamps
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  google.protobuf.Timestamp settled_at = 12;
+
+  // Idempotency key for duplicate detection
+  string idempotency_key = 13;
+
+  // Trace ID for distributed tracing
+  string trace_id = 14;
+
+  // Current processing step
+  string current_step = 15;
+
+  // Settlement batch ID (if batched)
+  string settlement_batch_id = 16;
+}
+
+// Account represents a bank account
+message Account {
+  // Account identifier (IBAN, account number, etc.)
+  string account_id = 1;
+
+  // Account name (individual or entity)
+  string account_name = 2;
+
+  // BIC/SWIFT code
+  string bic = 3;
+
+  // Bank name
+  string bank_name = 4;
+
+  // Country code (ISO 3166-1 alpha-2)
+  string country_code = 5;
+
+  // Address information (for compliance)
+  Address address = 6;
+}
+
+// Address for compliance (Travel Rule)
+message Address {
+  string address_line_1 = 1;
+  string address_line_2 = 2;
+  string city = 3;
+  string postal_code = 4;
+  string country_code = 5; // ISO 3166-1 alpha-2
+}
+
+// SettlementMethod defines how payment is settled
+enum SettlementMethod {
+  SETTLEMENT_METHOD_UNSPECIFIED = 0;
+  SETTLEMENT_METHOD_INSTANT = 1;      // Real-time settlement
+  SETTLEMENT_METHOD_PVP = 2;          // Payment vs Payment (atomic)
+  SETTLEMENT_METHOD_NETTING = 3;      // Batch netting
+  SETTLEMENT_METHOD_CORRESPONDENT = 4; // Traditional correspondent banking
+}
+
+// PaymentStatus tracks payment lifecycle
+enum PaymentStatus {
+  PAYMENT_STATUS_UNSPECIFIED = 0;
+  PAYMENT_STATUS_INITIATED = 1;
+  PAYMENT_STATUS_VALIDATED = 2;
+  PAYMENT_STATUS_SCREENED = 3;    // Sanctions/AML check complete
+  PAYMENT_STATUS_APPROVED = 4;
+  PAYMENT_STATUS_QUEUED = 5;      // Queued for settlement
+  PAYMENT_STATUS_SETTLED = 6;     // Settlement complete
+  PAYMENT_STATUS_COMPLETED = 7;   // Final confirmation
+  PAYMENT_STATUS_REJECTED = 8;
+  PAYMENT_STATUS_FAILED = 9;
+  PAYMENT_STATUS_CANCELLED = 10;
+}
+
+// PaymentEvent represents a state change in payment lifecycle
+message PaymentEvent {
+  // Unique event identifier (UUIDv7 for time-ordering)
+  string event_id = 1;
+
+  // Payment this event belongs to
+  string payment_id = 2;
+
+  // Event type
+  EventType event_type = 3;
+
+  // Event timestamp (nanoseconds since Unix epoch)
+  int64 timestamp_nanos = 4;
+
+  // Payment details at this point in time
+  Payment payment = 5;
+
+  // Event metadata
+  map<string, string> metadata = 6;
+
+  // Digital signature (Ed25519)
+  bytes signature = 7;
+
+  // Block ID if finalized
+  string block_id = 8;
+
+  // Previous event ID (for chaining)
+  string previous_event_id = 9;
+}
+
+// EventType defines state transitions
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  EVENT_TYPE_PAYMENT_INITIATED = 1;
+  EVENT_TYPE_VALIDATION_PASSED = 2;
+  EVENT_TYPE_VALIDATION_FAILED = 3;
+  EVENT_TYPE_SANCTIONS_CLEARED = 4;
+  EVENT_TYPE_SANCTIONS_HIT = 5;
+  EVENT_TYPE_RISK_APPROVED = 6;
+  EVENT_TYPE_RISK_REJECTED = 7;
+  EVENT_TYPE_QUEUED_FOR_SETTLEMENT = 8;
+  EVENT_TYPE_SETTLEMENT_STARTED = 9;
+  EVENT_TYPE_SETTLEMENT_COMPLETED = 10;
+  EVENT_TYPE_PAYMENT_COMPLETED = 11;
+  EVENT_TYPE_PAYMENT_REJECTED = 12;
+  EVENT_TYPE_PAYMENT_FAILED = 13;
+}
+
+// PaymentInitiateRequest starts a new payment
+message PaymentInitiateRequest {
+  string amount = 1;
+  string currency = 2;
+  string debtor_account = 3;
+  string creditor_account = 4;
+  string debtor_name = 5;
+  string creditor_name = 6;
+  string purpose = 7;
+  string idempotency_key = 8;
+
+  // Optional fields
+  string debtor_bic = 9;
+  string creditor_bic = 10;
+  Address debtor_address = 11;
+  Address creditor_address = 12;
+}
+
+// PaymentInitiateResponse returns payment details
+message PaymentInitiateResponse {
+  string payment_id = 1;
+  string uetr = 2;
+  PaymentStatus status = 3;
+  google.protobuf.Timestamp created_at = 4;
+  string trace_id = 5;
+}
+
+// PaymentStatusRequest queries payment status
+message PaymentStatusRequest {
+  string payment_id = 1;
+}
+
+// PaymentStatusResponse returns current status
+message PaymentStatusResponse {
+  Payment payment = 1;
+  repeated PaymentEvent events = 2; // Event history
+}
+
+// PaymentService defines payment operations
+service PaymentService {
+  // Initiate a new payment
+  rpc InitiatePayment(PaymentInitiateRequest) returns (PaymentInitiateResponse);
+
+  // Get payment status
+  rpc GetPaymentStatus(PaymentStatusRequest) returns (PaymentStatusResponse);
+
+  // Cancel payment (if not yet settled)
+  rpc CancelPayment(PaymentStatusRequest) returns (PaymentStatusResponse);
+}
