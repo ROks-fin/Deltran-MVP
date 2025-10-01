@@ -1,0 +1,45 @@
+[package]
+name = "consensus"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "consensus"
+path = "src/lib.rs"
+
+[[bin]]
+name = "consensus-node"
+path = "src/bin/node.rs"
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+uuid = { workspace = true }
+rust_decimal = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+chrono = { workspace = true }
+
+# CometBFT / Tendermint
+tendermint = "0.34"
+tendermint-abci = "0.34"
+tendermint-proto = "0.34"
+tendermint-rpc = { version = "0.34", features = ["http-client"] }
+
+# Internal dependencies
+ledger-core = { path = "../ledger-core" }
+
+# Networking
+tower = "0.4"
+tower-abci = "0.11"
+
+[dev-dependencies]
+tempfile = "3.8"

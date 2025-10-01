@@ -1,0 +1,16 @@
+# Rust
+target/
+Cargo.lock
+
+# Configuration
+config.toml
+.env
+
+# Data directories
+data/
+*.db
+*.log
+
+# CometBFT
+cometbft.log
+cometbft/

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reconciliation - DelTran Gateway</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0A0E27 0%, #1a1a2e 50%, #16213e 100%);
+            color: #E8E8E8;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.5), rgba(30, 41, 59, 0.3));
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            border: 1px solid rgba(244, 208, 63, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #F4D03F 0%, #FFA500 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .back-btn {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, rgba(244, 208, 63, 0.1), rgba(255, 165, 0, 0.1));
+            border: 1px solid rgba(244, 208, 63, 0.3);
+            border-radius: 8px;
+            color: #F4D03F;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            font-size: 1rem;
+        }
+
+        .back-btn:hover {
+            background: linear-gradient(135deg, rgba(244, 208, 63, 0.2), rgba(255, 165, 0, 0.2));
+            border-color: rgba(244, 208, 63, 0.5);
+            box-shadow: 0 0 20px rgba(244, 208, 63, 0.3);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.5), rgba(30, 41, 59, 0.3));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(244, 208, 63, 0.1);
+            border-radius: 16px;
+            padding: 1.5rem;
+        }
+
+        .stat-label {
+            color: #A0AEC0;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            color: #F4D03F;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .action-card {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.5), rgba(30, 41, 59, 0.3));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(244, 208, 63, 0.1);
+            border-radius: 16px;
+            padding: 2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .action-card:hover {
+            border-color: rgba(244, 208, 63, 0.3);
+            box-shadow: 0 8px 32px rgba(244, 208, 63, 0.15);
+            transform: translateY(-4px);
+        }
+
+        .action-card h3 {
+            color: #F4D03F;
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
+        }
+
+        .action-card p {
+            color: #A0AEC0;
+            font-size: 0.9rem;
+        }
+
+        .action-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(244, 208, 63, 0.3);
+            border-radius: 20px;
+            padding: 2.5rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(244, 208, 63, 0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .modal-header h2 {
+            color: #F4D03F;
+            font-size: 1.8rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #F4D03F;
+            font-size: 2rem;
+            cursor: pointer;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: rgba(244, 208, 63, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            color: #F4D03F;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(244, 208, 63, 0.2);
+            border-radius: 8px;
+            color: #E8E8E8;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: rgba(244, 208, 63, 0.5);
+            box-shadow: 0 0 10px rgba(244, 208, 63, 0.2);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #F4D03F, #FFA500);
+            border: none;
+            border-radius: 8px;
+            color: #0A0E27;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(244, 208, 63, 0.4);
+        }
+
+        .result-box {
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            display: none;
+        }
+
+        .result-box h3 {
+            color: #10B981;
+            margin-bottom: 1rem;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(16, 185, 129, 0.1);
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-label {
+            color: #A0AEC0;
+        }
+
+        .result-value {
+            color: #E8E8E8;
+            font-weight: 600;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header animate-in">
+            <h1>🔄 Reconciliation & Audit</h1>
+            <a href="corridors-premium.html" class="back-btn">← Back to Dashboard</a>
+        </div>
+
+        <div class="stats-grid animate-in">
+            <div class="stat-card">
+                <div class="stat-label">Reconciliation Rate</div>
+                <div class="stat-value" id="reconRate">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Matched Accounts</div>
+                <div class="stat-value" id="matched">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Mismatched</div>
+                <div class="stat-value" id="mismatched" style="color: #EF4444;">--</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Discrepancy</div>
+                <div class="stat-value" id="discrepancy" style="color: #F59E0B;">--</div>
+            </div>
+        </div>
+
+        <div class="actions-grid">
+            <div class="action-card animate-in" onclick="openRunModal()">
+                <div class="action-icon">▶️</div>
+                <h3>Run Reconciliation</h3>
+                <p>Start new reconciliation process for date range</p>
+            </div>
+
+            <div class="action-card animate-in" onclick="showComingSoon('View Positions')">
+                <div class="action-icon">📊</div>
+                <h3>View Positions</h3>
+                <p>Check current account balances and positions</p>
+            </div>
+
+            <div class="action-card animate-in" onclick="showComingSoon('View Results')">
+                <div class="action-icon">📋</div>
+                <h3>View Results</h3>
+                <p>Access reconciliation results and adjustments</p>
+            </div>
+
+            <div class="action-card animate-in" onclick="showComingSoon('Manual Adjustment')">
+                <div class="action-icon">✏️</div>
+                <h3>Manual Adjustment</h3>
+                <p>Apply manual corrections to discrepancies</p>
+            </div>
+
+            <div class="action-card animate-in" onclick="showComingSoon('Audit Trail')">
+                <div class="action-icon">🔍</div>
+                <h3>Audit Trail</h3>
+                <p>Review complete audit history</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Run Reconciliation Modal -->
+    <div class="modal" id="runModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>▶️ Run Reconciliation</h2>
+                <button class="close-btn" onclick="closeModal('runModal')">×</button>
+            </div>
+            <form id="runForm" onsubmit="runReconciliation(event)">
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" name="start_date" required>
+                </div>
+                <div class="form-group">
+                    <label>End Date</label>
+                    <input type="date" name="end_date" required>
+                </div>
+                <div class="form-group">
+                    <label>Accounts (Optional - leave empty for all)</label>
+                    <input type="text" name="accounts" placeholder="ACCT_001, ACCT_002, ...">
+                </div>
+                <button type="submit" class="submit-btn">Start Reconciliation</button>
+            </form>
+            <div class="result-box" id="runResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api/v1';
+
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            const modal = document.getElementById(modalId);
+            const form = modal.querySelector('form');
+            const result = modal.querySelector('.result-box');
+            if (form) form.reset();
+            if (result) result.style.display = 'none';
+        }
+
+        function openRunModal() {
+            openModal('runModal');
+            // Set default dates
+            const today = new Date();
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            document.querySelector('input[name="start_date"]').value = yesterday.toISOString().split('T')[0];
+            document.querySelector('input[name="end_date"]').value = today.toISOString().split('T')[0];
+        }
+
+        function showComingSoon(feature) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.98));
+                backdrop-filter: blur(20px);
+                border: 2px solid rgba(244, 208, 63, 0.5);
+                border-radius: 20px;
+                padding: 3rem;
+                z-index: 10000;
+                text-align: center;
+                box-shadow: 0 20px 60px rgba(244, 208, 63, 0.4);
+                max-width: 500px;
+            `;
+            notification.innerHTML = `
+                <div style="font-size: 3rem; margin-bottom: 1rem;">🚧</div>
+                <h2 style="color: #F4D03F; margin-bottom: 1rem;">Coming Soon</h2>
+                <p style="color: #E8E8E8; margin-bottom: 2rem;"><strong>${feature}</strong> section is under development</p>
+                <button onclick="this.parentElement.remove()" style="
+                    padding: 0.75rem 2rem;
+                    background: linear-gradient(135deg, #F4D03F, #FFA500);
+                    border: none;
+                    border-radius: 8px;
+                    color: #0A0E27;
+                    font-weight: 600;
+                    cursor: pointer;
+                    font-size: 1rem;
+                ">Got it</button>
+            `;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        async function runReconciliation(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+
+            let accounts = [];
+            const accountsInput = formData.get('accounts').trim();
+            if (accountsInput) {
+                accounts = accountsInput.split(',').map(a => a.trim());
+            }
+
+            const data = {
+                start_date: formData.get('start_date'),
+                end_date: formData.get('end_date'),
+                accounts: accounts.length > 0 ? accounts : undefined
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/reconciliation/run`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+
+                const resultBox = document.getElementById('runResult');
+                resultBox.innerHTML = `
+                    <h3>✅ Reconciliation Started</h3>
+                    <div class="result-item">
+                        <span class="result-label">Run ID:</span>
+                        <span class="result-value">${result.run_id}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Status:</span>
+                        <span class="result-value">${result.status}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Started At:</span>
+                        <span class="result-value">${new Date(result.started_at).toLocaleString()}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Message:</span>
+                        <span class="result-value">${result.message}</span>
+                    </div>
+                    <div style="margin-top: 1rem; padding: 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; color: #3B82F6;">
+                        💡 Reconciliation is running in the background. Results will be available shortly.
+                    </div>
+                `;
+                resultBox.style.display = 'block';
+
+                // Update stats with demo data
+                updateStats();
+            } catch (error) {
+                alert('Error running reconciliation: ' + error.message);
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('reconRate').textContent = '98.5%';
+            document.getElementById('matched').textContent = '247';
+            document.getElementById('mismatched').textContent = '3';
+            document.getElementById('discrepancy').textContent = '$2,450';
+        }
+
+        // Initialize with placeholder
+        window.addEventListener('load', () => {
+            document.getElementById('reconRate').textContent = '0%';
+            document.getElementById('matched').textContent = '0';
+            document.getElementById('mismatched').textContent = '0';
+            document.getElementById('discrepancy').textContent = '$0';
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Limits & Controls - DelTran Gateway</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0A0E27 0%, #1a1a2e 50%, #16213e 100%);
+            color: #E8E8E8;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.5), rgba(30, 41, 59, 0.3));
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            border: 1px solid rgba(244, 208, 63, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, #F4D03F 0%, #FFA500 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .back-btn {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, rgba(244, 208, 63, 0.1), rgba(255, 165, 0, 0.1));
+            border: 1px solid rgba(244, 208, 63, 0.3);
+            border-radius: 8px;
+            color: #F4D03F;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            font-size: 1rem;
+        }
+
+        .back-btn:hover {
+            background: linear-gradient(135deg, rgba(244, 208, 63, 0.2), rgba(255, 165, 0, 0.2));
+            border-color: rgba(244, 208, 63, 0.5);
+            box-shadow: 0 0 20px rgba(244, 208, 63, 0.3);
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .action-card {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.5), rgba(30, 41, 59, 0.3));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(244, 208, 63, 0.1);
+            border-radius: 16px;
+            padding: 2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .action-card:hover {
+            border-color: rgba(244, 208, 63, 0.3);
+            box-shadow: 0 8px 32px rgba(244, 208, 63, 0.15);
+            transform: translateY(-4px);
+        }
+
+        .action-card h3 {
+            color: #F4D03F;
+            margin-bottom: 0.5rem;
+            font-size: 1.2rem;
+        }
+
+        .action-card p {
+            color: #A0AEC0;
+            font-size: 0.9rem;
+        }
+
+        .action-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .data-section {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.5), rgba(30, 41, 59, 0.3));
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(244, 208, 63, 0.1);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .data-section h2 {
+            color: #F4D03F;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+
+        .limits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .limit-card {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.7), rgba(30, 41, 59, 0.5));
+            border: 1px solid rgba(244, 208, 63, 0.15);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        .limit-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid rgba(244, 208, 63, 0.1);
+        }
+
+        .limit-type {
+            color: #F4D03F;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10B981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .status-warning {
+            background: rgba(245, 158, 11, 0.2);
+            color: #F59E0B;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .limit-progress {
+            margin: 1rem 0;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            color: #A0AEC0;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10B981, #F59E0B);
+            transition: width 0.3s ease;
+        }
+
+        .limit-details {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .detail-label {
+            color: #A0AEC0;
+            font-size: 0.85rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .detail-value {
+            color: #E8E8E8;
+            font-weight: 600;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(244, 208, 63, 0.3);
+            border-radius: 20px;
+            padding: 2.5rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(244, 208, 63, 0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .modal-header h2 {
+            color: #F4D03F;
+            font-size: 1.8rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #F4D03F;
+            font-size: 2rem;
+            cursor: pointer;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: rgba(244, 208, 63, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            color: #F4D03F;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(244, 208, 63, 0.2);
+            border-radius: 8px;
+            color: #E8E8E8;
+            font-size: 1rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: rgba(244, 208, 63, 0.5);
+            box-shadow: 0 0 10px rgba(244, 208, 63, 0.2);
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 1rem;
+            background: linear-gradient(135deg, #F4D03F, #FFA500);
+            border: none;
+            border-radius: 8px;
+            color: #0A0E27;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(244, 208, 63, 0.4);
+        }
+
+        .result-box {
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 12px;
+            display: none;
+        }
+
+        .result-box h3 {
+            color: #10B981;
+            margin-bottom: 1rem;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(16, 185, 129, 0.1);
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-label {
+            color: #A0AEC0;
+        }
+
+        .result-value {
+            color: #E8E8E8;
+            font-weight: 600;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header animate-in">
+            <h1>🛡️ Limits & Risk Controls</h1>
+            <a href="corridors-premium.html" class="back-btn">← Back to Dashboard</a>
+        </div>
+
+        <div class="actions-grid">
+            <div class="action-card animate-in" onclick="openSetLimitModal()">
+                <div class="action-icon">➕</div>
+                <h3>Set Limit</h3>
+                <p>Configure new participant limits</p>
+            </div>
+
+            <div class="action-card animate-in" onclick="showComingSoon('View Limit Usage')">
+                <div class="action-icon">📊</div>
+                <h3>View Usage</h3>
+                <p>Monitor limit utilization across participants</p>
+            </div>
+
+            <div class="action-card animate-in" onclick="showComingSoon('Freeze Controls')">
+                <div class="action-icon">❄️</div>
+                <h3>Freeze Controls</h3>
+                <p>Temporarily freeze participant activities</p>
+            </div>
+
+            <div class="action-card animate-in" onclick="showComingSoon('Unfreeze Controls')">
+                <div class="action-icon">🔓</div>
+                <h3>Unfreeze Controls</h3>
+                <p>Restore participant operations</p>
+            </div>
+        </div>
+
+        <div class="data-section animate-in">
+            <h2>Active Limits</h2>
+            <div class="limits-grid" id="limitsGrid">
+                <div style="grid-column: 1/-1; text-align: center; padding: 2rem; color: #A0AEC0;">
+                    Demo limits will appear here...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Set Limit Modal -->
+    <div class="modal" id="setLimitModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Set Participant Limit</h2>
+                <button class="close-btn" onclick="closeModal('setLimitModal')">×</button>
+            </div>
+            <form id="limitForm" onsubmit="setLimit(event)">
+                <div class="form-group">
+                    <label>Participant ID</label>
+                    <input type="text" name="participant_id" placeholder="PART_001" required>
+                </div>
+                <div class="form-group">
+                    <label>Limit Type</label>
+                    <select name="limit_type" required>
+                        <option value="DAILY">Daily Limit</option>
+                        <option value="TRANSACTION">Per Transaction</option>
+                        <option value="COUNTERPARTY">Per Counterparty</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Currency</label>
+                    <select name="currency" required>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="INR">INR</option>
+                        <option value="AED">AED</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Amount</label>
+                    <input type="number" name="amount" step="0.01" placeholder="1000000.00" required>
+                </div>
+                <div class="form-group">
+                    <label>Direction</label>
+                    <select name="direction" required>
+                        <option value="SEND">Send Only</option>
+                        <option value="RECEIVE">Receive Only</option>
+                        <option value="BOTH">Both Directions</option>
+                    </select>
+                </div>
+                <button type="submit" class="submit-btn">Set Limit</button>
+            </form>
+            <div class="result-box" id="limitResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api/v1';
+
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+            const modal = document.getElementById(modalId);
+            const form = modal.querySelector('form');
+            const result = modal.querySelector('.result-box');
+            if (form) form.reset();
+            if (result) result.style.display = 'none';
+        }
+
+        function openSetLimitModal() { openModal('setLimitModal'); }
+
+        function showComingSoon(feature) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.98));
+                backdrop-filter: blur(20px);
+                border: 2px solid rgba(244, 208, 63, 0.5);
+                border-radius: 20px;
+                padding: 3rem;
+                z-index: 10000;
+                text-align: center;
+                box-shadow: 0 20px 60px rgba(244, 208, 63, 0.4);
+                max-width: 500px;
+            `;
+            notification.innerHTML = `
+                <div style="font-size: 3rem; margin-bottom: 1rem;">🚧</div>
+                <h2 style="color: #F4D03F; margin-bottom: 1rem;">Coming Soon</h2>
+                <p style="color: #E8E8E8; margin-bottom: 2rem;"><strong>${feature}</strong> section is under development</p>
+                <button onclick="this.parentElement.remove()" style="
+                    padding: 0.75rem 2rem;
+                    background: linear-gradient(135deg, #F4D03F, #FFA500);
+                    border: none;
+                    border-radius: 8px;
+                    color: #0A0E27;
+                    font-weight: 600;
+                    cursor: pointer;
+                    font-size: 1rem;
+                ">Got it</button>
+            `;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        async function setLimit(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = {
+                participant_id: formData.get('participant_id'),
+                limit_type: formData.get('limit_type'),
+                currency: formData.get('currency'),
+                amount: parseFloat(formData.get('amount')),
+                direction: formData.get('direction')
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/limits/set`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+
+                const resultBox = document.getElementById('limitResult');
+                resultBox.innerHTML = `
+                    <h3>✅ Limit Set Successfully</h3>
+                    <div class="result-item">
+                        <span class="result-label">Limit ID:</span>
+                        <span class="result-value">${result.limit_id}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Participant:</span>
+                        <span class="result-value">${result.participant_id}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Type:</span>
+                        <span class="result-value">${result.limit_type}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Amount:</span>
+                        <span class="result-value">${result.amount.toLocaleString()} ${result.currency}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Available:</span>
+                        <span class="result-value">${result.available.toLocaleString()} ${result.currency}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Utilization:</span>
+                        <span class="result-value">${result.utilization_percent.toFixed(1)}%</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Status:</span>
+                        <span class="result-value">${result.status}</span>
+                    </div>
+                    <div class="result-item">
+                        <span class="result-label">Created At:</span>
+                        <span class="result-value">${new Date(result.created_at).toLocaleString()}</span>
+                    </div>
+                `;
+                resultBox.style.display = 'block';
+                displayDemoLimits(result);
+            } catch (error) {
+                alert('Error setting limit: ' + error.message);
+            }
+        }
+
+        function displayDemoLimits(newLimit) {
+            const grid = document.getElementById('limitsGrid');
+            const utilization = newLimit ? newLimit.utilization_percent : 0;
+            const statusClass = utilization > 80 ? 'status-warning' : 'status-active';
+
+            grid.innerHTML = `
+                <div class="limit-card">
+                    <div class="limit-header">
+                        <div class="limit-type">${newLimit ? newLimit.limit_type : 'DAILY'}</div>
+                        <span class="status-badge ${statusClass}">${newLimit ? newLimit.status : 'ACTIVE'}</span>
+                    </div>
+                    <div class="limit-progress">
+                        <div class="progress-label">
+                            <span>Utilization</span>
+                            <span>${utilization.toFixed(1)}%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: ${utilization}%"></div>
+                        </div>
+                    </div>
+                    <div class="limit-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Participant</span>
+                            <span class="detail-value">${newLimit ? newLimit.participant_id : 'PART_001'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Currency</span>
+                            <span class="detail-value">${newLimit ? newLimit.currency : 'USD'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Limit</span>
+                            <span class="detail-value">${newLimit ? newLimit.amount.toLocaleString() : '1,000,000'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Available</span>
+                            <span class="detail-value">${newLimit ? newLimit.available.toLocaleString() : '1,000,000'}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Show demo limits on load
+        window.addEventListener('load', () => {
+            displayDemoLimits(null);
+        });
+    </script>
+</body>
+</html>
