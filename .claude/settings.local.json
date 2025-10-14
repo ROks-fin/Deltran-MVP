@@ -72,7 +72,10 @@
       "Bash(CGO_ENABLED=1 go build:*)",
       "Bash(rustc --version)",
       "Bash(DB_HOST=localhost DB_PORT=5432 DB_USER=deltran_app DB_PASSWORD=changeme123 DB_NAME=deltran REDIS_HOST=localhost REDIS_PORT=6379 REDIS_PASSWORD=redis123 timeout:*)",
-      "Bash(del nul)"
+      "Bash(del nul)",
+      "Bash(git remote get-url:*)",
+      "Bash(git config:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
