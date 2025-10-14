@@ -19,8 +19,7 @@ pub struct KeyPair {
 impl KeyPair {
     /// Generate a new random key pair
     pub fn generate() -> Self {
-        let mut rng = rand::rngs::OsRng;
-        let signing_key = SigningKey::generate(&mut rng);
+        let signing_key = SigningKey::from_bytes(&rand::random::<[u8; 32]>());
         let verifying_key = signing_key.verifying_key();
 
         Self {
@@ -75,10 +74,7 @@ pub fn verify_signature(
     signature: &crate::types::Signature,
     public_key: &[u8; 32],
 ) -> bool {
-    let dalek_sig = match DalekSignature::from_bytes(signature.as_bytes()) {
-        Ok(sig) => sig,
-        Err(_) => return false,
-    };
+    let dalek_sig = DalekSignature::from_bytes(signature.as_bytes());
 
     let verifying_key = match VerifyingKey::from_bytes(public_key) {
         Ok(key) => key,

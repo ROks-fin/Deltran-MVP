@@ -1,0 +1,20 @@
+{
+  "test_config": {
+    "target_tps": 3000,
+    "duration_seconds": 300,
+    "banks": [
+      {
+        "id": "bank-uae-001",
+        "name": "Emirates National Bank",
+        "bic": "ENBXAEADXXX",
+        "country": "AE",
+        "timezone": "Asia/Dubai",
+        "primary_currency": "AED",
+        "secondary_currencies": [
+          "USD",
+          "EUR",
+          "SAR"
+        ],
+        "clearing_window_start": "08:00",
+        "clearing_window_end": "16:00",
+        "daily_liquidity_limit": 

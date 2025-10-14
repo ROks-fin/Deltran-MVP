@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DelTran WebSocket Live Updates</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.connecting {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        button.connect {
+            background-color: #28a745;
+            color: white;
+        }
+        button.disconnect {
+            background-color: #dc3545;
+            color: white;
+        }
+        button.send {
+            background-color: #007bff;
+            color: white;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .events {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .event {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-left: 3px solid #007bff;
+            background-color: white;
+            border-radius: 2px;
+        }
+        .event.payment_update {
+            border-left-color: #28a745;
+        }
+        .event.metrics_update {
+            border-left-color: #17a2b8;
+        }
+        .event.pong {
+            border-left-color: #6c757d;
+        }
+        .event .timestamp {
+            color: #6c757d;
+            font-size: 10px;
+        }
+        .event .type {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .event .data {
+            margin-top: 5px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .stat-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>DelTran WebSocket Live Updates Test</h1>
+
+    <div class="container">
+        <div class="panel">
+            <h2>Connection</h2>
+            <div id="status" class="status disconnected">Disconnected</div>
+
+            <label for="wsUrl">WebSocket URL:</label>
+            <input type="text" id="wsUrl" value="ws://localhost:8080/api/v1/ws" placeholder="ws://localhost:8080/api/v1/ws">
+
+            <label for="token">JWT Token (optional):</label>
+            <input type="text" id="token" placeholder="eyJhbGciOiJIUzI1NiIs...">
+
+            <div>
+                <button id="connectBtn" class="connect">Connect</button>
+                <button id="disconnectBtn" class="disconnect" disabled>Disconnect</button>
+                <button id="pingBtn" class="send" disabled>Send Ping</button>
+                <button id="clearBtn" class="send">Clear Events</button>
+            </div>
+
+            <div class="stats">
+                <div class="stat-box">
+                    <div class="stat-value" id="eventsReceived">0</div>
+                    <div class="stat-label">Events Received</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="lastEventTime">-</div>
+                    <div class="stat-label">Last Event</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="connectionTime">-</div>
+                    <div class="stat-label">Connected</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Custom Message</h2>
+            <label for="customMessage">JSON Message:</label>
+            <textarea id="customMessage" style="width: 100%; height: 100px; font-family: 'Courier New', monospace; padding: 8px;">
+{
+  "type": "subscribe",
+  "filter": {
+    "status": "pending"
+  }
+}
+            </textarea>
+            <button id="sendCustomBtn" class="send" disabled>Send Custom Message</button>
+        </div>
+    </div>
+
+    <div class="panel" style="margin-top: 20px;">
+        <h2>Live Events (Most Recent First)</h2>
+        <div id="events" class="events">
+            <p style="color: #6c757d; text-align: center;">No events received yet. Connect to start receiving live updates.</p>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let eventsCount = 0;
+        let connectionStartTime = null;
+        let connectionTimeInterval = null;
+
+        const statusDiv = document.getElementById('status');
+        const eventsDiv = document.getElementById('events');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const pingBtn = document.getElementById('pingBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const sendCustomBtn = document.getElementById('sendCustomBtn');
+        const wsUrlInput = document.getElementById('wsUrl');
+        const tokenInput = document.getElementById('token');
+        const customMessageInput = document.getElementById('customMessage');
+
+        function updateStatus(status, message) {
+            statusDiv.className = 'status ' + status;
+            statusDiv.textContent = message;
+        }
+
+        function updateConnectionTime() {
+            if (connectionStartTime) {
+                const elapsed = Math.floor((Date.now() - connectionStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                document.getElementById('connectionTime').textContent =
+                    `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+        }
+
+        function addEvent(type, data, timestamp) {
+            eventsCount++;
+            document.getElementById('eventsReceived').textContent = eventsCount;
+            document.getElementById('lastEventTime').textContent = new Date().toLocaleTimeString();
+
+            const eventDiv = document.createElement('div');
+            eventDiv.className = 'event ' + type;
+            eventDiv.innerHTML = `
+                <div class="timestamp">${timestamp || new Date().toISOString()}</div>
+                <div class="type">${type}</div>
+                <div class="data">${JSON.stringify(data, null, 2)}</div>
+            `;
+
+            // Insert at the beginning
+            if (eventsDiv.firstChild) {
+                eventsDiv.insertBefore(eventDiv, eventsDiv.firstChild);
+            } else {
+                eventsDiv.innerHTML = '';
+                eventsDiv.appendChild(eventDiv);
+            }
+
+            // Limit to 50 events
+            while (eventsDiv.children.length > 50) {
+                eventsDiv.removeChild(eventsDiv.lastChild);
+            }
+        }
+
+        function connect() {
+            const url = wsUrlInput.value;
+            const token = tokenInput.value;
+
+            updateStatus('connecting', 'Connecting...');
+
+            // Add token to URL if provided
+            const wsUrl = token ? `${url}?token=${encodeURIComponent(token)}` : url;
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                updateStatus('connected', 'Connected to ' + url);
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                pingBtn.disabled = false;
+                sendCustomBtn.disabled = false;
+                wsUrlInput.disabled = true;
+                tokenInput.disabled = true;
+                connectionStartTime = Date.now();
+                connectionTimeInterval = setInterval(updateConnectionTime, 1000);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    addEvent(data.type || 'unknown', data.data || data, data.timestamp);
+                } catch (e) {
+                    addEvent('raw', event.data, new Date().toISOString());
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateStatus('disconnected', 'Connection error');
+            };
+
+            ws.onclose = () => {
+                updateStatus('disconnected', 'Disconnected');
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                pingBtn.disabled = true;
+                sendCustomBtn.disabled = true;
+                wsUrlInput.disabled = false;
+                tokenInput.disabled = false;
+                if (connectionTimeInterval) {
+                    clearInterval(connectionTimeInterval);
+                    connectionTimeInterval = null;
+                }
+                ws = null;
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        function sendPing() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const message = {
+                    type: 'ping',
+                    timestamp: new Date().toISOString()
+                };
+                ws.send(JSON.stringify(message));
+                addEvent('sent', message, new Date().toISOString());
+            }
+        }
+
+        function sendCustomMessage() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                    const message = JSON.parse(customMessageInput.value);
+                    ws.send(JSON.stringify(message));
+                    addEvent('sent', message, new Date().toISOString());
+                } catch (e) {
+                    alert('Invalid JSON: ' + e.message);
+                }
+            }
+        }
+
+        function clearEvents() {
+            eventsDiv.innerHTML = '<p style="color: #6c757d; text-align: center;">No events received yet.</p>';
+            eventsCount = 0;
+            document.getElementById('eventsReceived').textContent = '0';
+            document.getElementById('lastEventTime').textContent = '-';
+        }
+
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+        pingBtn.addEventListener('click', sendPing);
+        sendCustomBtn.addEventListener('click', sendCustomMessage);
+        clearBtn.addEventListener('click', clearEvents);
+
+        // Allow Enter key in custom message textarea to send
+        customMessageInput.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                sendCustomMessage();
+            }
+        });
+    </script>
+</body>
+</html>

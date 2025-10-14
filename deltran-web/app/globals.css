@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-deltran-dark text-white antialiased;
+  }
+}
+
+.text-gradient-gold {
+  @apply bg-gradient-to-r from-deltran-gold via-deltran-gold-light to-deltran-gold bg-clip-text text-transparent;
+}

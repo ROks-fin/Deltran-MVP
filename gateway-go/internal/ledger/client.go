@@ -4,6 +4,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/deltran/gateway/internal/types"
@@ -19,6 +20,7 @@ type Client struct {
 	conn    *grpc.ClientConn
 	logger  *zap.Logger
 	timeout time.Duration
+	closed  bool
 }
 
 // NewClient creates a new ledger client
@@ -108,8 +110,13 @@ func (c *Client) FinalizeBlock(ctx context.Context, eventIDs []uuid.UUID) (uuid.
 	return blockID, nil
 }
 
-// Close closes the ledger client
+// Close closes the ledger client (idempotent)
 func (c *Client) Close() error {
+	if c.closed {
+		return nil // Already closed
+	}
+	c.closed = true
+
 	if c.conn != nil {
 		return c.conn.Close()
 	}
@@ -124,6 +131,7 @@ type Batch struct {
 	submitFn  func([]*Event) error
 	timer     *time.Timer
 	submitCh  chan struct{}
+	mu        sync.Mutex
 }
 
 // Event represents a ledger event
@@ -150,6 +158,9 @@ func NewBatch(maxSize int, timeout time.Duration, submitFn func([]*Event) error)
 
 // Add adds an event to the batch
 func (b *Batch) Add(event *Event) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	b.events = append(b.events, event)
 
 	// Check if batch is full
@@ -177,6 +188,9 @@ func (b *Batch) flush() error {
 
 // Close closes the batch
 func (b *Batch) Close() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	b.timer.Stop()
 	return b.flush()
 }

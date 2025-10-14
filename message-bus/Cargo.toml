@@ -6,6 +6,10 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+name = "message_bus"
+path = "src/lib.rs"
+
 [dependencies]
 # Workspace dependencies
 tokio = { workspace = true }
@@ -14,26 +18,11 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-chrono = { workspace = true }
 uuid = { workspace = true }
-bytes = { workspace = true }
+chrono = { workspace = true }
 
-# NATS messaging
+# NATS client
 async-nats = "0.33"
 
-# Hashing for partitioning
-blake3 = { workspace = true }
-
-# Async utilities
-async-trait = "0.1"
-futures = "0.3"
-
-# Retry logic
-backoff = { version = "0.4", features = ["tokio"] }
-
-# Metrics
-prometheus = { workspace = true }
-lazy_static = "1.5"
-
 [dev-dependencies]
-tokio = { workspace = true, features = ["test-util"] }
+proptest = { workspace = true }

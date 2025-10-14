@@ -1,7 +1,10 @@
 [workspace]
-members = ["adapters",
-    "ledger-core", "message-bus", "protocol-core",
+members = [
+    "ledger-core",
     "settlement",
+    "message-bus",
+    "risk-engine",
+    "compliance-service",
 ]
 resolver = "2"
 

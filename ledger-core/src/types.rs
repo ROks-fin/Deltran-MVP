@@ -350,6 +350,7 @@ pub struct ValidatorSignature {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Signature {
     /// Signature bytes (64 bytes)
+    #[serde(with = "serde_bytes")]
     bytes: [u8; 64],
 }
 
@@ -368,10 +369,7 @@ impl Signature {
     pub fn verify(&self, message: &[u8], public_key: &[u8; 32]) -> bool {
         use ed25519_dalek::{Signature as DalekSignature, Verifier, VerifyingKey};
 
-        let signature = match DalekSignature::from_bytes(&self.bytes) {
-            Ok(sig) => sig,
-            Err(_) => return false,
-        };
+        let signature = DalekSignature::from_bytes(&self.bytes);
 
         let verifying_key = match VerifyingKey::from_bytes(public_key) {
             Ok(key) => key,

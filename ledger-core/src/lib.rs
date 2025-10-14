@@ -45,3 +45,4 @@ pub use types::{
 };
 pub use ledger::Ledger;
 pub use config::Config;
+pub use storage::Storage;

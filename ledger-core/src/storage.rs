@@ -16,7 +16,7 @@ use crate::{
 };
 use parking_lot::RwLock;
 use rocksdb::{
-    ColumnFamily, ColumnFamilyDescriptor, DBCompactionStyle, IteratorMode, Options, WriteBatch, DB,
+    BoundColumnFamily, ColumnFamilyDescriptor, DBCompactionStyle, IteratorMode, Options, WriteBatch, DB,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -138,8 +138,8 @@ impl Storage {
     }
 
     // Helper: get column family handle
-
-    fn cf_handle(&self, name: &str) -> Result<&ColumnFamily> {
+    #[inline]
+    fn cf(&self, name: &str) -> Result<Arc<BoundColumnFamily>> {
         self.db
             .cf_handle(name)
             .ok_or_else(|| Error::Storage(format!("Column family {} not found", name)))
@@ -149,11 +149,11 @@ impl Storage {
 
     /// Append event (single, unbatched)
     pub fn append_event(&self, event: &LedgerEvent) -> Result<()> {
-        let cf = self.cf_handle(CF_EVENTS)?;
+        let cf = self.cf(CF_EVENTS)?;
         let key = event.event_id.as_bytes();
         let value = bincode::serialize(event)?;
 
-        self.db.put_cf(cf, key, &value)?;
+        self.db.put_cf(&cf, key, &value)?;
 
         tracing::debug!(
             event_id = %event.event_id,
@@ -166,12 +166,12 @@ impl Storage {
 
     /// Get event by ID
     pub fn get_event(&self, event_id: Uuid) -> Result<LedgerEvent> {
-        let cf = self.cf_handle(CF_EVENTS)?;
+        let cf = self.cf(CF_EVENTS)?;
         let key = event_id.as_bytes();
 
         let value = self
             .db
-            .get_cf(cf, key)?
+            .get_cf(&cf, key)?
             .ok_or_else(|| Error::EventNotFound(event_id.to_string()))?;
 
         let event: LedgerEvent = bincode::deserialize(&value)?;
@@ -180,13 +180,13 @@ impl Storage {
 
     /// Get events by payment ID (via index)
     pub fn get_payment_events(&self, payment_id: Uuid) -> Result<Vec<LedgerEvent>> {
-        let cf_indices = self.cf_handle(CF_INDICES)?;
+        let cf_indices = self.cf(CF_INDICES)?;
 
         // Scan index: payment_id || event_id
         let prefix = Self::index_key_payment_event(&payment_id, None);
         let prefix_bytes = &prefix[..16]; // First 16 bytes = payment_id
 
-        let iter = self.db.prefix_iterator_cf(cf_indices, prefix_bytes);
+        let iter = self.db.prefix_iterator_cf(&cf_indices, prefix_bytes);
 
         let mut events = Vec::new();
         for item in iter {
@@ -209,23 +209,23 @@ impl Storage {
 
     /// Put payment state
     pub fn put_payment_state(&self, state: &PaymentState) -> Result<()> {
-        let cf = self.cf_handle(CF_STATE)?;
+        let cf = self.cf(CF_STATE)?;
         let key = state.payment_id.as_bytes();
         let value = bincode::serialize(state)?;
 
-        self.db.put_cf(cf, key, &value)?;
+        self.db.put_cf(&cf, key, &value)?;
 
         Ok(())
     }
 
     /// Get payment state by ID
     pub fn get_payment_state(&self, payment_id: Uuid) -> Result<PaymentState> {
-        let cf = self.cf_handle(CF_STATE)?;
+        let cf = self.cf(CF_STATE)?;
         let key = payment_id.as_bytes();
 
         let value = self
             .db
-            .get_cf(cf, key)?
+            .get_cf(&cf, key)?
             .ok_or_else(|| Error::PaymentNotFound(payment_id.to_string()))?;
 
         let state: PaymentState = bincode::deserialize(&value)?;
@@ -236,11 +236,11 @@ impl Storage {
 
     /// Put block
     pub fn put_block(&self, block: &Block) -> Result<()> {
-        let cf = self.cf_handle(CF_BLOCKS)?;
+        let cf = self.cf(CF_BLOCKS)?;
         let key = block.block_height.to_be_bytes();
         let value = bincode::serialize(block)?;
 
-        self.db.put_cf(cf, &key, &value)?;
+        self.db.put_cf(&cf, &key, &value)?;
 
         tracing::info!(
             block_id = %block.block_id,
@@ -254,12 +254,12 @@ impl Storage {
 
     /// Get block by height
     pub fn get_block(&self, height: u64) -> Result<Block> {
-        let cf = self.cf_handle(CF_BLOCKS)?;
+        let cf = self.cf(CF_BLOCKS)?;
         let key = height.to_be_bytes();
 
         let value = self
             .db
-            .get_cf(cf, &key)?
+            .get_cf(&cf, &key)?
             .ok_or_else(|| Error::BlockNotFound(height.to_string()))?;
 
         let block: Block = bincode::deserialize(&value)?;
@@ -268,9 +268,9 @@ impl Storage {
 
     /// Get latest block
     pub fn get_latest_block(&self) -> Result<Option<Block>> {
-        let cf = self.cf_handle(CF_BLOCKS)?;
+        let cf = self.cf(CF_BLOCKS)?;
 
-        let iter = self.db.iterator_cf(cf, IteratorMode::End);
+        let iter = self.db.iterator_cf(&cf, IteratorMode::End);
 
         for item in iter {
             let (_, value) = item?;
@@ -292,35 +292,35 @@ impl Storage {
         let mut batch = WriteBatch::default();
 
         // 1. Event
-        let cf_events = self.cf_handle(CF_EVENTS)?;
+        let cf_events = self.cf(CF_EVENTS)?;
         let event_key = event.event_id.as_bytes();
         let event_value = bincode::serialize(event)?;
-        batch.put_cf(cf_events, event_key, &event_value);
+        batch.put_cf(&cf_events, event_key, &event_value);
 
         // 2. Payment state
-        let cf_state = self.cf_handle(CF_STATE)?;
+        let cf_state = self.cf(CF_STATE)?;
         let state_key = state.payment_id.as_bytes();
         let state_value = bincode::serialize(state)?;
-        batch.put_cf(cf_state, state_key, &state_value);
+        batch.put_cf(&cf_state, state_key, &state_value);
 
         // 3. Indices
-        let cf_indices = self.cf_handle(CF_INDICES)?;
+        let cf_indices = self.cf(CF_INDICES)?;
 
         // Index: payment_id || event_id -> empty
         let idx_payment_event = Self::index_key_payment_event(&event.payment_id, Some(event.event_id));
-        batch.put_cf(cf_indices, &idx_payment_event, &[]);
+        batch.put_cf(&cf_indices, &idx_payment_event, &[]);
 
         // Index: account (debtor) || payment_id -> empty
         let idx_debtor = Self::index_key_account_payment(&event.debtor, event.payment_id);
-        batch.put_cf(cf_indices, &idx_debtor, &[]);
+        batch.put_cf(&cf_indices, &idx_debtor, &[]);
 
         // Index: account (creditor) || payment_id -> empty
         let idx_creditor = Self::index_key_account_payment(&event.creditor, event.payment_id);
-        batch.put_cf(cf_indices, &idx_creditor, &[]);
+        batch.put_cf(&cf_indices, &idx_creditor, &[]);
 
         // Index: status || payment_id -> empty
         let idx_status = Self::index_key_status_payment(state.status, state.payment_id);
-        batch.put_cf(cf_indices, &idx_status, &[]);
+        batch.put_cf(&cf_indices, &idx_status, &[]);
 
         // Atomic commit
         self.db.write(batch)?;
@@ -358,22 +358,22 @@ impl Storage {
 
     /// Get storage statistics
     pub fn get_stats(&self) -> Result<StorageStats> {
-        let cf_events = self.cf_handle(CF_EVENTS)?;
-        let cf_blocks = self.cf_handle(CF_BLOCKS)?;
-        let cf_state = self.cf_handle(CF_STATE)?;
+        let cf_events = self.cf(CF_EVENTS)?;
+        let cf_blocks = self.cf(CF_BLOCKS)?;
+        let cf_state = self.cf(CF_STATE)?;
 
         // Count events (approximate, fast)
-        let event_count = self.approximate_count(cf_events)?;
+        let event_count = self.approximate_count(&cf_events)?;
 
         // Count blocks
         let mut block_count = 0u64;
-        let iter = self.db.iterator_cf(cf_blocks, IteratorMode::Start);
+        let iter = self.db.iterator_cf(&cf_blocks, IteratorMode::Start);
         for _ in iter {
             block_count += 1;
         }
 
         // Count payments
-        let payment_count = self.approximate_count(cf_state)?;
+        let payment_count = self.approximate_count(&cf_state)?;
 
         Ok(StorageStats {
             total_events: event_count,
@@ -382,7 +382,7 @@ impl Storage {
         })
     }
 
-    fn approximate_count(&self, cf: &ColumnFamily) -> Result<u64> {
+    fn approximate_count(&self, cf: &Arc<BoundColumnFamily>) -> Result<u64> {
         // RocksDB property for approximate count
         let prop = self
             .db

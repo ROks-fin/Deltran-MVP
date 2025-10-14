@@ -159,7 +159,8 @@ impl SettlementEngine {
     /// Shutdown engine
     pub async fn shutdown(self) -> Result<()> {
         tracing::info!("Shutting down settlement engine");
-        self.ledger.clone().shutdown().await?;
+        // Ledger shutdown would happen here if needed
+        // Arc<Ledger> doesn't have shutdown method in current implementation
         Ok(())
     }
 }

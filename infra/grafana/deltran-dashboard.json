@@ -1,0 +1,255 @@
+{
+  "dashboard": {
+    "title": "DelTran Payment System",
+    "tags": ["deltran", "payments"],
+    "timezone": "browser",
+    "editable": true,
+    "graphTooltip": 1,
+    "panels": [
+      {
+        "id": 1,
+        "title": "Transactions Per Second (TPS)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(deltran_gateway_payments_total[1m])",
+            "legendFormat": "{{status}} - {{currency}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Payment Success Rate",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(deltran_gateway_payments_total{status='settled'}[5m])) / sum(rate(deltran_gateway_payments_total[5m])) * 100"
+          }
+        ],
+        "options": {
+          "minValue": 0,
+          "maxValue": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 90, "color": "yellow"},
+              {"value": 98, "color": "green"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Payment Volume (24h)",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(increase(deltran_gateway_payments_total[24h]))"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Payment Processing Time (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(deltran_gateway_payment_processing_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{currency}}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "ISO 20022 Validation Success Rate",
+        "type": "gauge",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(deltran_gateway_iso20022_validations_total{result='valid'}[5m])) / sum(rate(deltran_gateway_iso20022_validations_total[5m])) * 100"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "ISO 20022 Validation Errors",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 8},
+        "targets": [
+          {
+            "expr": "topk(10, sum by(error_code) (increase(deltran_gateway_iso20022_validation_errors_total[1h])))",
+            "format": "table"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Sanctions Screening Hits",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "sum by(risk_level) (rate(deltran_gateway_sanctions_hits_total[5m]))",
+            "legendFormat": "{{risk_level}}"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Sanctions Screening Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(deltran_gateway_sanctions_screening_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(deltran_gateway_sanctions_screening_duration_seconds_bucket[5m]))",
+            "legendFormat": "p50"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "HTTP Request Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "sum by(status) (rate(deltran_gateway_http_requests_total[1m]))",
+            "legendFormat": "{{status}}"
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "HTTP Request Duration (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(deltran_gateway_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{method}} {{path}}"
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Database Connection Pool",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "deltran_gateway_db_connections_active"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Database Query Duration (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 32},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(deltran_gateway_db_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{operation}} on {{table}}"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Redis Operations",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 32},
+        "targets": [
+          {
+            "expr": "sum by(operation, status) (rate(deltran_gateway_redis_operations_total[1m]))",
+            "legendFormat": "{{operation}} - {{status}}"
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "WebSocket Connections",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 40},
+        "targets": [
+          {
+            "expr": "deltran_gateway_websocket_connections_active"
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "title": "NATS Message Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 9, "x": 6, "y": 40},
+        "targets": [
+          {
+            "expr": "rate(deltran_gateway_nats_messages_published_total[1m])",
+            "legendFormat": "Published - {{subject}}"
+          },
+          {
+            "expr": "rate(deltran_gateway_nats_messages_consumed_total[1m])",
+            "legendFormat": "Consumed - {{subject}}"
+          }
+        ]
+      },
+      {
+        "id": 16,
+        "title": "Service Health",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 15, "y": 40},
+        "targets": [
+          {
+            "expr": "deltran_gateway_service_healthy"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "value_and_name",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"value": 1, "text": "Healthy", "color": "green"},
+              {"value": 0, "text": "Unhealthy", "color": "red"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 17,
+        "title": "Service Uptime",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 3, "x": 21, "y": 40},
+        "targets": [
+          {
+            "expr": "deltran_gateway_service_uptime_seconds"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        }
+      }
+    ],
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}

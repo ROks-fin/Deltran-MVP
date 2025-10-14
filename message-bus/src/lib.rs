@@ -1,27 +1,14 @@
-//! Message Bus with NATS support
+//! Message Bus for DelTran
 //!
-//! Provides pub/sub messaging with:
-//! - Partitioning by corridor_id and bank_id
-//! - JetStream for persistence and guaranteed delivery
-//! - Consumer groups for load balancing
-//! - Retry logic with exponential backoff
-//! - Observability via Prometheus metrics
+//! Provides pub/sub messaging using NATS/JetStream
 
 #![forbid(unsafe_code)]
-#![warn(missing_docs, rust_2018_idioms)]
+#![warn(missing_docs)]
 
-pub mod client;
 pub mod error;
-pub mod message;
-pub mod metrics;
-pub mod partitioning;
-pub mod publisher;
-pub mod subscriber;
+pub mod client;
 pub mod types;
 
-pub use client::NatsClient;
 pub use error::{Error, Result};
-pub use message::Message;
-pub use publisher::Publisher;
-pub use subscriber::Subscriber;
-pub use types::{MessageType, PartitionKey};
+pub use client::MessageBusClient;
+pub use types::{Message, Subject};

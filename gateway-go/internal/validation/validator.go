@@ -173,8 +173,16 @@ func (v *Validator) AssessRisk(payment *types.Payment) *types.RiskAssessment {
 	}
 
 	// 2. Country-based risk
-	debtorCountry := payment.DebtorBank[:2]
-	creditorCountry := payment.CreditorBank[:2]
+	// BIC format: 4 letters (bank) + 2 letters (country) + 2 alphanumeric (location) + optional 3 (branch)
+	debtorCountry := ""
+	creditorCountry := ""
+
+	if len(payment.DebtorBank) >= 6 {
+		debtorCountry = payment.DebtorBank[4:6]
+	}
+	if len(payment.CreditorBank) >= 6 {
+		creditorCountry = payment.CreditorBank[4:6]
+	}
 
 	if isHighRiskCountry(debtorCountry) || isHighRiskCountry(creditorCountry) {
 		assessment.RiskScore += 0.4

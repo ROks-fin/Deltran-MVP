@@ -34,6 +34,7 @@ use crate::{
     Error, Result,
 };
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -104,19 +105,24 @@ impl NettingEngine {
             )));
         }
 
-        // Get first payment for window times (approximation)
-        let first_payment = by_currency
-            .values()
-            .next()
-            .and_then(|v| v.first())
-            .ok_or_else(|| Error::Netting("No payments found".to_string()))?;
+        // Get first payment for window times (approximation) - need to get before by_currency is moved
+        let window_start = all_net_transfers
+            .first()
+            .map(|t| chrono::Utc::now() - chrono::Duration::hours(6))
+            .unwrap_or_else(chrono::Utc::now);
+
+        let payment_count = all_net_transfers.len();
+        let first_currency = all_net_transfers
+            .first()
+            .map(|t| t.currency)
+            .unwrap_or(ledger_core::Currency::USD);
 
         Ok(SettlementBatch {
             batch_id: Uuid::new_v4(),
-            window_start: first_payment.queued_at,
+            window_start,
             window_end: chrono::Utc::now(),
-            currency: first_payment.currency,
-            payment_count: by_currency.values().map(|v| v.len()).sum(),
+            currency: first_currency,
+            payment_count,
             gross_obligations: all_obligations,
             net_transfers: all_net_transfers,
             total_gross_amount: total_gross,

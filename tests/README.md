@@ -1,448 +1,244 @@
-# DelTran Testing & Validation
+# DelTran System - Testing Suite
 
-Comprehensive testing suite for the DelTran Settlement Rail.
+Comprehensive testing suite for the DelTran distributed settlement system.
 
-## Test Suite Overview
+## Test Files
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  Test Pyramid                        │
-├─────────────────────────────────────────────────────┤
-│                                                      │
-│              E2E Tests (10%)                         │
-│        ┌────────────────────┐                        │
-│        │  User workflows    │                        │
-│        │  Full system       │                        │
-│        └────────────────────┘                        │
-│                                                      │
-│         Integration Tests (30%)                      │
-│    ┌──────────────────────────────┐                 │
-│    │  Service interactions        │                 │
-│    │  Database tests              │                 │
-│    │  API contracts               │                 │
-│    └──────────────────────────────┘                 │
-│                                                      │
-│             Unit Tests (60%)                         │
-│  ┌────────────────────────────────────────┐         │
-│  │  Business logic                        │         │
-│  │  Data structures                       │         │
-│  │  Algorithms (netting, merkle, crypto)  │         │
-│  └────────────────────────────────────────┘         │
-└─────────────────────────────────────────────────────┘
-```
+### 1. Component Test Suite (`component_test_suite.py`)
+Tests each system component individually:
+- ✅ Gateway Service (health, banks, payments)
+- ✅ Settlement Engine (batches, netting, settlement)
+- ✅ Compliance Service (limits, checks, status)
+- ✅ Risk Engine (assessment, exposure, VaR)
+- ✅ Reconciliation Service (status, discrepancies)
+- ✅ Message Bus (publish, stats)
+- ✅ Ledger Core (entries, balances, history)
 
-## Test Categories
+### 2. Multi-Bank Stress Test (`stress_test_multibank.py`)
+Simulates realistic multi-bank integration:
+- 🏦 5 Banks: US, Germany, UK, Japan, Switzerland
+- 💱 5 Currencies: USD, EUR, GBP, JPY, CHF
+- 📊 50 TPS target rate
+- ⏱️ 5 minute duration (~15,000 transactions)
+- 📈 Real-time metrics collection
+- 🎯 Performance analysis (P95, P99 latency)
 
-### 1. Unit Tests
+### 3. Test Runner Scripts
+- **Linux/Mac**: `run_all_tests.sh`
+- **Windows**: `run_all_tests.bat`
 
-Located within each module (`src/**/tests/`).
+## Banks Configuration
 
-**Coverage:**
-- Ledger core: Event sourcing, state machines, Merkle trees
-- Settlement: Netting algorithms, window management
-- Security: Input sanitization, rate limiting, cryptography
-- Consensus: State management, transaction validation
+| Bank ID | Name | Country | Currency | SWIFT | Initial Balance |
+|---------|------|---------|----------|-------|----------------|
+| BANK001 | Global Bank America | USA | USD | GLBAUS33 | $10M |
+| BANK002 | European Finance Group | Germany | EUR | EURFDE33 | €8M |
+| BANK003 | London Sterling Bank | UK | GBP | LSTRGB2L | £7M |
+| BANK004 | Tokyo International Bank | Japan | JPY | TOINJPJT | ¥1.2B |
+| BANK005 | Swiss Private Banking | Switzerland | CHF | SWPBCHZZ | CHF 9M |
 
-**Running:**
+## Running Tests
+
+### Prerequisites
 ```bash
-# All unit tests
-cargo test --workspace
+# Install Python dependencies
+pip install aiohttp asyncio
 
-# Specific module
-cargo test --package ledger-core
-cargo test --package settlement
-cargo test --package security
-cargo test --package consensus
-
-# With output
-cargo test -- --nocapture
-
-# Single test
-cargo test test_merkle_tree_verification
+# Start the Gateway service
+cd gateway
+cargo run --release
 ```
 
-**Expected Results:**
-- Ledger core: 50+ tests, 90%+ coverage
-- Settlement: 30+ tests, 85%+ coverage
-- Security: 40+ tests, 95%+ coverage
-- Consensus: 20+ tests, 80%+ coverage
+### Run All Tests (Automated)
 
-### 2. Integration Tests
-
-Located in `tests/integration_tests.rs`.
-
-**Test Scenarios:**
-
-| Test | Description | Validates |
-|------|-------------|-----------|
-| `test_end_to_end_payment_flow` | Full payment lifecycle | Gateway → Ledger → Settlement |
-| `test_multilateral_netting` | Payment cycle netting | 78-89% efficiency |
-| `test_consensus_finality` | Block commitment | Byzantine fault tolerance |
-| `test_byzantine_fault_tolerance` | 1/3 node failure | System remains operational |
-| `test_rate_limiting` | DDoS protection | Rate limiter effectiveness |
-| `test_input_validation` | Security checks | SQL/XSS/command injection |
-| `test_audit_logging` | Tamper detection | Hash chain integrity |
-| `test_tls_mtls_authentication` | Certificate validation | mTLS security |
-| `test_money_conservation` | Financial integrity | No money creation/destruction |
-| `test_high_throughput` | Concurrent load | 1000+ TPS target |
-| `test_settlement_window_timing` | Auto-trigger | 6-hour window compliance |
-| `test_merkle_proof_verification` | Cryptographic proofs | Inclusion verification |
-| `test_iso20022_generation` | Message format | pacs.008 compliance |
-
-**Running:**
+**Linux/Mac:**
 ```bash
-# All integration tests
-cargo test --test integration_tests
-
-# Specific test
-cargo test --test integration_tests test_multilateral_netting
-
-# With detailed output
-cargo test --test integration_tests -- --nocapture
+cd tests
+chmod +x run_all_tests.sh
+./run_all_tests.sh
 ```
 
-**Expected Duration:**
-- Total: 2-5 minutes
-- Individual test: 1-30 seconds
+**Windows:**
+```cmd
+cd tests
+run_all_tests.bat
+```
 
-### 3. Performance Benchmarks
+### Run Individual Tests
 
-Located in `tests/benchmarks.rs`.
-
-**Benchmark Groups:**
-
-**Ledger:**
-- `append_single_event` - Single event append latency
-- `append_batch` - Batched append throughput (10/100/1000 events)
-- `get_payment_state` - Query latency
-
-**Merkle Tree:**
-- `build_tree` - Tree construction (10/100/1000/10000 leaves)
-- `generate_proof` - Proof generation time
-
-**Settlement:**
-- `compute_netting` - Netting algorithm (10/100/1000 payments)
-- `generate_pacs008` - ISO 20022 message generation
-
-**Gateway:**
-- `sanitize_bic` - BIC validation
-- `sanitize_iban` - IBAN validation
-- `sanitize_amount` - Amount validation
-- `check_sql_injection` - Security check
-
-**Security:**
-- `ed25519_sign` - Signature generation
-- `ed25519_verify` - Signature verification
-- `sha256_hash` - Hash computation
-- `log_event` - Audit log write
-
-**End-to-End:**
-- `payment_full_lifecycle` - Complete payment flow
-- `concurrent_payments` - Concurrent throughput (10/100/1000)
-
-**Running:**
+**Component Tests:**
 ```bash
-# All benchmarks
-cargo bench
-
-# Specific group
-cargo bench --bench benchmarks ledger
-cargo bench --bench benchmarks settlement
-
-# With baseline comparison
-cargo bench --bench benchmarks -- --baseline previous
-
-# HTML report
-cargo bench --bench benchmarks -- --output-format html
+python tests/component_test_suite.py
 ```
 
-**Target Performance:**
-
-| Metric | Target | Actual |
-|--------|--------|--------|
-| Ledger append (single) | <10ms p95 | ~5ms |
-| Ledger append (batched) | <1ms per event | ~0.5ms |
-| Merkle tree (1000 leaves) | <10ms | ~5ms |
-| Netting (1000 payments) | <100ms | ~50ms |
-| Input validation | <1µs | ~500ns |
-| Ed25519 sign | <100µs | ~50µs |
-| End-to-end payment | <50ms | ~30ms |
-| Concurrent throughput | ≥1000 TPS | ~1500 TPS |
-
-### 4. Load Testing
-
-Located in `tests/load_test.py`.
-
-**Test Configuration:**
-- Duration: 60 seconds (configurable)
-- Target RPS: 1000 (configurable)
-- Workers: 100 concurrent (configurable)
-- Payment amount: $100 - $1,000,000
-- Currencies: USD, EUR, GBP, CHF, JPY
-- Banks: 10 major BICs (Deutsche, Chase, HSBC, etc.)
-
-**Metrics Collected:**
-- **Throughput**: Total requests, TPS, success rate
-- **Latency**: min, avg, p50, p95, p99, max
-- **Errors**: Count, rate, types
-- **Resources**: CPU usage, memory usage
-
-**Running:**
+**Stress Test:**
 ```bash
-# Install dependencies
-pip install aiohttp psutil
-
-# Default test (60s, 1000 RPS)
-python tests/load_test.py --target http://localhost:8080
-
-# Custom configuration
-python tests/load_test.py \
-  --target http://localhost:8080 \
-  --duration 300 \
-  --rps 2000 \
-  --workers 200 \
-  --output results.json
-
-# Analyze results
-cat results.json | jq '.metrics'
+python tests/stress_test_multibank.py
 ```
 
-**Expected Results:**
+## Expected Results
+
+### Component Tests
+- Should see ✓ for each successfully tested component
+- Some tests may warn if services are not fully implemented yet
+- Typical run time: 10-30 seconds
+
+### Stress Test
+Sample output:
 ```
-Throughput:
-  Total Requests:      60,000
-  Successful:          59,400 (99%)
-  Failed:              600 (1%)
-  Duration:            60.00s
-  Throughput:          1,000 TPS
-  Error Rate:          1.00%
+Configuration:
+  Banks: 5
+  Currencies: USD, EUR, GBP, JPY, CHF
+  Target Rate: 50 TPS
+  Duration: 300 seconds
+  Total Expected Transactions: ~15000
 
-Latency:
-  Min:                 5.23ms
-  Average:             45.67ms
-  p50 (median):        42.11ms
-  p95:                 78.34ms
-  p99:                 95.12ms
-  Max:                 150.45ms
+STRESS TEST REPORT
+==================
+Test Duration: 300.00 seconds
+Total Requests: 15000
+Successful: 14850 (99.00%)
+Failed: 150 (1.00%)
 
-System Resources:
-  CPU Usage:           65.3%
-  Memory Usage:        2,456.7 MB
+Response Times:
+  Min: 12.50ms
+  Max: 456.78ms
+  Mean: 89.34ms
+  Median: 76.12ms
+  P95: 145.67ms
+  P99: 234.89ms
 
-Assessment:
-  ✓ Throughput target met (≥1000 TPS)
-  ✓ Latency target met (p95 ≤100ms)
-  ✓ Error rate acceptable (<1%)
-```
+Throughput: 49.50 TPS
 
-## Test Execution Guide
-
-### CI/CD Pipeline
-
-```yaml
-# .github/workflows/test.yml
-name: Test Suite
-
-on: [push, pull_request]
-
-jobs:
-  unit_tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-      - run: cargo test --workspace
-
-  integration_tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: cargo test --test integration_tests
-
-  benchmarks:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: cargo bench --bench benchmarks
-
-  load_tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: python tests/load_test.py --duration 60
+Transactions by Currency:
+  USD: 3045 transactions, 45,678,901.23 USD
+  EUR: 2987 transactions, 37,890,234.56 EUR
+  GBP: 3012 transactions, 32,123,456.78 GBP
+  JPY: 2976 transactions, 4,567,890,123.45 JPY
+  CHF: 2980 transactions, 39,876,543.21 CHF
 ```
 
-### Local Development
+## Test Scenarios
 
-```bash
-# Quick check (unit tests only)
-cargo test --workspace
+### Payment Flow Tests
+1. **Cross-border payments** (different currencies)
+2. **Same-currency transfers** (domestic)
+3. **Large value payments** (>$100k)
+4. **Small retail payments** (<$1k)
+5. **Concurrent transactions** (multiple simultaneous)
 
-# Full suite (unit + integration)
-cargo test --workspace --all-features
-cargo test --test integration_tests
+### Compliance Tests
+1. Limit enforcement (daily/transaction limits)
+2. Sanctions screening
+3. Risk assessment
+4. Regulatory reporting
 
-# Performance validation
-cargo bench --bench benchmarks
+### Settlement Tests
+1. Batch creation and processing
+2. Netting calculations
+3. Settlement finalization
+4. Reconciliation
 
-# Load testing
-python tests/load_test.py --duration 60 --rps 1000
+### Error Scenarios
+1. Rate limiting (429 responses)
+2. Timeout handling
+3. Invalid data rejection
+4. Duplicate transaction detection
 
-# Coverage report
-cargo tarpaulin --out Html --output-dir coverage
-open coverage/index.html
-```
+## Performance Benchmarks
 
-### Pre-Release Checklist
+### Target Metrics
+- ✅ **Latency P95**: < 200ms
+- ✅ **Latency P99**: < 500ms
+- ✅ **Throughput**: 50+ TPS
+- ✅ **Success Rate**: > 99%
+- ✅ **Settlement Rate**: > 98%
 
-- [ ] All unit tests passing
-- [ ] All integration tests passing
-- [ ] Benchmarks meet targets
-- [ ] Load test: 1000+ TPS with p95 <100ms
-- [ ] Code coverage: >80%
-- [ ] No high-severity security issues (cargo audit)
-- [ ] Documentation updated
-- [ ] CHANGELOG.md updated
-
-## Test Data
-
-### Sample Payments
-
-```rust
-// Simple payment
-Payment {
-    payment_id: Uuid::new_v4(),
-    amount: Decimal::new(10000, 2), // $100.00
-    currency: Currency::USD,
-    debtor_bic: "DEUTDEFF",
-    creditor_bic: "CHASUS33",
-    ...
-}
-
-// Payment cycle (perfect netting)
-vec![
-    Payment { debtor: "A", creditor: "B", amount: $100 },
-    Payment { debtor: "B", creditor: "C", amount: $100 },
-    Payment { debtor: "C", creditor: "A", amount: $100 },
-]
-// Net result: $0 transfers (100% efficiency)
-```
-
-### Test Banks
-
-| BIC | Bank | Country |
-|-----|------|---------|
-| DEUTDEFF | Deutsche Bank | Germany |
-| CHASUS33 | JP Morgan Chase | USA |
-| HSBCGB2L | HSBC | UK |
-| BNPAFRPP | BNP Paribas | France |
-| CRESCHZZ | Credit Suisse | Switzerland |
+### System Limits
+- **Max Concurrent Connections**: 200
+- **Rate Limit**: 100 req/sec per client
+- **Batch Size**: 1000 payments
+- **Settlement Cycle**: 60 seconds
 
 ## Troubleshooting
 
-### Test Failures
-
-**Integration test timeout:**
-```bash
-# Increase timeout
-RUST_TEST_TIMEOUT=300 cargo test --test integration_tests
+### Gateway Not Running
+```
+Error: Gateway is not running at http://localhost:8080
+Solution: Start gateway with: cd gateway && cargo run --release
 ```
 
-**Port already in use:**
-```bash
-# Find and kill process
-lsof -ti:8080 | xargs kill -9
+### High Failure Rate
+```
+Failed: 5000 (33%)
+Possible causes:
+- Rate limiting (reduce TPS)
+- Database connection issues
+- Memory constraints
+Solution: Check gateway logs, reduce load, increase resources
 ```
 
-**Database locked:**
-```bash
-# Clean test artifacts
-rm -rf /tmp/deltran_test_*
+### Timeout Errors
+```
+Error: Timeout
+Possible causes:
+- Gateway overloaded
+- Network issues
+- Database slow
+Solution: Reduce concurrent requests, check system resources
 ```
 
-### Performance Issues
+## Web Interface Integration
 
-**Low TPS:**
-- Check CPU/memory resources
-- Verify network latency
-- Increase worker count
-- Enable batching
+The test suite generates real data that feeds into the web interface:
 
-**High latency:**
-- Profile with `cargo flamegraph`
-- Check disk I/O
-- Optimize query patterns
-- Add caching
+1. **Dashboard Metrics**
+   - Total volume calculated from payments
+   - Active payment count
+   - Settlement rate from completed batches
+   - Average processing time
 
-**High error rate:**
-- Check logs for specific errors
-- Verify rate limit configuration
-- Check database connection pool
-- Monitor resource exhaustion
+2. **Transaction Table**
+   - Real payment data from `/api/payments`
+   - Live status updates
+   - Filtering and sorting
 
-## Continuous Monitoring
+3. **Analytics**
+   - Risk heatmap from real risk scores
+   - Currency distribution from payment volumes
+   - Payment flow visualization
 
-### Metrics Dashboard
+## Continuous Integration
 
-Monitor in production:
-
-```
-Throughput:
-  ├─ Requests per second (target: 1000+)
-  ├─ Success rate (target: 99%+)
-  └─ Error rate (target: <1%)
-
-Latency:
-  ├─ p50 (target: <50ms)
-  ├─ p95 (target: <100ms)
-  └─ p99 (target: <200ms)
-
-Business Metrics:
-  ├─ Payments processed
-  ├─ Settlement batches created
-  ├─ Netting efficiency (target: 70%+)
-  └─ Block finalization time (target: <6s)
-
-System Health:
-  ├─ CPU usage (target: <80%)
-  ├─ Memory usage (target: <4GB)
-  ├─ Disk I/O
-  └─ Network throughput
-```
-
-### Alerts
+These tests can be integrated into CI/CD pipelines:
 
 ```yaml
-- alert: HighLatency
-  expr: histogram_quantile(0.95, payment_latency_ms) > 100
-  severity: warning
-
-- alert: LowThroughput
-  expr: rate(payments_total[5m]) < 1000
-  severity: warning
-
-- alert: HighErrorRate
-  expr: rate(payments_failed_total[5m]) / rate(payments_total[5m]) > 0.01
-  severity: critical
-
-- alert: ConsensusStalled
-  expr: increase(consensus_height[5m]) == 0
-  severity: critical
+# Example GitHub Actions
+- name: Run DelTran Tests
+  run: |
+    ./tests/run_all_tests.sh
 ```
 
-## Contributing
+## Test Results Location
 
-When adding new features:
+All test results are saved to `tests/results/`:
+- `component_tests_YYYYMMDD_HHMMSS.log`
+- `stress_test_YYYYMMDD_HHMMSS.log`
 
-1. Write unit tests first (TDD)
-2. Add integration tests for API contracts
-3. Update benchmarks if performance-critical
-4. Document test scenarios in this README
-5. Verify all tests pass before PR
+## Next Steps
 
-## References
+After successful testing:
+1. ✅ Verify web interface shows real data
+2. ✅ Check all components are operational
+3. ✅ Review performance metrics
+4. ✅ Validate compliance checks
+5. ✅ Test reconciliation accuracy
+6. 🚀 Deploy to production
 
-- [Rust Testing Guide](https://doc.rust-lang.org/book/ch11-00-testing.html)
-- [Criterion Benchmarking](https://bheisler.github.io/criterion.rs/book/)
-- [Load Testing Best Practices](https://grafana.com/load-testing/)
-- [Test Pyramid](https://martinfowler.com/articles/practical-test-pyramid.html)
+## Support
+
+For issues or questions:
+- Check gateway logs: `gateway/logs/`
+- Review test output in `tests/results/`
+- Verify service configuration
+- Check database connectivity
