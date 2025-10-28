@@ -2,12 +2,249 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Premium Fonts Import */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
 @layer base {
+  :root {
+    /* Premium Gold Colors */
+    --gold-primary: 212 175 55;
+    --gold-light: 230 199 87;
+    --gold-dark: 184 151 48;
+    --gold-glow: rgba(212, 175, 55, 0.3);
+
+    /* Dark Backgrounds */
+    --bg-midnight: 10 10 10;
+    --bg-charcoal: 26 26 26;
+    --bg-obsidian: 15 15 15;
+
+    /* Light Accents */
+    --light-platinum: 229 229 231;
+    --light-pearl: 248 248 248;
+
+    /* Spacing System (Golden Ratio) */
+    --spacing-unit: 8px;
+    --spacing-xs: calc(var(--spacing-unit) * 0.5);
+    --spacing-sm: var(--spacing-unit);
+    --spacing-md: calc(var(--spacing-unit) * 2);
+    --spacing-lg: calc(var(--spacing-unit) * 3);
+    --spacing-xl: calc(var(--spacing-unit) * 5);
+    --spacing-2xl: calc(var(--spacing-unit) * 8);
+
+    /* Animation Timings */
+    --duration-fast: 200ms;
+    --duration-base: 300ms;
+    --duration-slow: 500ms;
+    --duration-slower: 800ms;
+
+    /* Easing Functions */
+    --ease-premium: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
   body {
-    @apply bg-deltran-dark text-white antialiased;
+    @apply bg-deltran-dark-midnight text-white antialiased;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Smooth scrolling with premium feel */
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 100px;
+  }
+
+  /* Selection styling */
+  ::selection {
+    @apply bg-deltran-gold/30 text-white;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-deltran-dark-charcoal;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-deltran-gold/30 rounded-full;
+    transition: background-color 0.3s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-deltran-gold/50;
   }
 }
 
-.text-gradient-gold {
-  @apply bg-gradient-to-r from-deltran-gold via-deltran-gold-light to-deltran-gold bg-clip-text text-transparent;
+@layer components {
+  /* Premium Text Gradients */
+  .text-gradient-gold {
+    @apply bg-gradient-to-r from-deltran-gold via-deltran-gold-light to-deltran-gold bg-clip-text text-transparent;
+  }
+
+  .text-gradient-silver {
+    @apply bg-gradient-to-r from-zinc-300 via-zinc-100 to-zinc-300 bg-clip-text text-transparent;
+  }
+
+  .text-gradient-premium {
+    @apply bg-gradient-to-br from-deltran-gold via-amber-300 to-yellow-200 bg-clip-text text-transparent;
+  }
+
+  /* Frosted Glass Effect */
+  .glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+
+  .glass-gold {
+    @apply bg-deltran-gold/5 backdrop-blur-xl border border-deltran-gold/20;
+  }
+
+  /* Premium Card */
+  .card-premium {
+    @apply relative rounded-2xl bg-deltran-dark-charcoal/50 backdrop-blur-xl border border-white/5 shadow-premium;
+    transition: all var(--duration-base) var(--ease-premium);
+  }
+
+  .card-premium:hover {
+    @apply border-deltran-gold/30 shadow-gold-lg;
+    transform: translateY(-4px);
+  }
+
+  /* Liquid Button */
+  .btn-liquid {
+    @apply relative overflow-hidden rounded-xl px-8 py-4 font-semibold text-white;
+    @apply bg-gradient-to-r from-deltran-gold to-deltran-gold-light;
+    @apply shadow-gold-md hover:shadow-gold-xl;
+    @apply transition-all duration-300 ease-premium;
+    @apply before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent;
+    @apply before:translate-x-[-200%] hover:before:translate-x-[200%];
+    @apply before:transition-transform before:duration-700;
+  }
+
+  .btn-liquid:hover {
+    transform: translateY(-2px) scale(1.02);
+  }
+
+  .btn-liquid:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  /* Shimmer Effect */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(212, 175, 55, 0.1) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2.5s linear infinite;
+  }
+
+  /* Gold Glow */
+  .glow-gold {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.3),
+                0 0 40px rgba(212, 175, 55, 0.2),
+                0 0 60px rgba(212, 175, 55, 0.1);
+  }
+
+  /* Floating Animation */
+  .floating {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  /* Premium Input */
+  .input-premium {
+    @apply w-full rounded-xl bg-deltran-dark-charcoal/50 border border-white/10;
+    @apply px-4 py-3 text-white placeholder:text-zinc-500;
+    @apply focus:outline-none focus:border-deltran-gold focus:ring-2 focus:ring-deltran-gold/20;
+    @apply transition-all duration-300;
+  }
+
+  .input-premium:focus {
+    @apply shadow-gold-md;
+  }
+}
+
+@layer utilities {
+  /* GPU Acceleration */
+  .gpu-accelerate {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+
+  /* Text Balance */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Optical Alignment */
+  .optical-align {
+    position: relative;
+    left: -0.05em;
+  }
+}
+
+/* Premium Animations */
+@keyframes shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes pulse-gold {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 0 10px rgba(212, 175, 55, 0);
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    filter: brightness(1) drop-shadow(0 0 5px rgba(212, 175, 55, 0.5));
+  }
+  50% {
+    filter: brightness(1.2) drop-shadow(0 0 15px rgba(212, 175, 55, 0.8));
+  }
+}
+
+/* Particle Effects */
+@keyframes particle-float {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) rotate(360deg);
+    opacity: 0;
+  }
 }

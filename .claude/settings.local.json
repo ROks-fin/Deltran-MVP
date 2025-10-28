@@ -75,7 +75,12 @@
       "Bash(del nul)",
       "Bash(git remote get-url:*)",
       "Bash(git config:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(Select-String -Pattern \"(✓|Failed|Error|Warning)\")",
+      "Bash(Select-Object -First 20)",
+      "Bash(start cmd /c \"gateway.exe\")",
+      "Bash(chcp:*)",
+      "Bash(git log -1 --format=\"%H %an %ae %s\")"
     ],
     "deny": [],
     "ask": []
