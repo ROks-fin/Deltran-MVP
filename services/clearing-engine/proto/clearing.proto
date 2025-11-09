@@ -1,0 +1,222 @@
+syntax = "proto3";
+
+package clearing;
+
+// Clearing Engine Service - manages clearing windows and orchestration
+service ClearingService {
+    // Window management
+    rpc GetCurrentWindow(GetCurrentWindowRequest) returns (WindowResponse);
+    rpc GetWindowStatus(GetWindowStatusRequest) returns (WindowStatusResponse);
+    rpc ForceCloseWindow(ForceCloseWindowRequest) returns (WindowCloseResult);
+    rpc OpenNewWindow(OpenNewWindowRequest) returns (WindowResponse);
+
+    // Window processing
+    rpc ProcessWindow(ProcessWindowRequest) returns (ProcessWindowResponse);
+    rpc GetProcessingResult(GetProcessingResultRequest) returns (ClearingResult);
+
+    // Streaming
+    rpc StreamWindowUpdates(StreamWindowRequest) returns (stream WindowUpdate);
+    rpc StreamSettlementStatus(StreamSettlementRequest) returns (stream SettlementStatusUpdate);
+
+    // Manual intervention
+    rpc TriggerEmergencyClearing(EmergencyRequest) returns (ClearingResult);
+    rpc RollbackWindow(RollbackRequest) returns (RollbackResult);
+
+    // Atomic operations
+    rpc GetOperationStatus(OperationStatusRequest) returns (OperationStatusResponse);
+}
+
+// ===== REQUEST/RESPONSE MESSAGES =====
+
+message GetCurrentWindowRequest {
+    string region = 1;  // Global, ADGM, Europe, etc.
+}
+
+message GetWindowStatusRequest {
+    int64 window_id = 1;
+}
+
+message ForceCloseWindowRequest {
+    int64 window_id = 1;
+    string reason = 2;
+}
+
+message OpenNewWindowRequest {
+    string region = 1;
+    bool emergency_mode = 2;
+}
+
+message ProcessWindowRequest {
+    int64 window_id = 1;
+    bool force_settlement = 2;
+}
+
+message GetProcessingResultRequest {
+    int64 window_id = 1;
+}
+
+message StreamWindowRequest {
+    string region = 1;
+}
+
+message StreamSettlementRequest {
+    int64 window_id = 1;
+}
+
+message EmergencyRequest {
+    string region = 1;
+    string reason = 2;
+    int32 max_obligations = 3;
+}
+
+message RollbackRequest {
+    int64 window_id = 1;
+    string reason = 2;
+}
+
+message OperationStatusRequest {
+    string operation_id = 1;
+}
+
+// ===== RESPONSE MESSAGES =====
+
+message WindowResponse {
+    Window window = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+message WindowStatusResponse {
+    string status = 1;
+    int32 obligations_count = 2;
+    string total_volume = 3;
+    string netted_volume = 4;
+    double netting_efficiency = 5;
+    string timestamp = 6;
+}
+
+message WindowCloseResult {
+    bool success = 1;
+    string message = 2;
+    int64 window_id = 3;
+    string closed_at = 4;
+}
+
+message ProcessWindowResponse {
+    bool success = 1;
+    string message = 2;
+    int64 window_id = 3;
+    string processing_started_at = 4;
+}
+
+message ClearingResult {
+    int64 window_id = 1;
+    string status = 2;  // Success, PartialSuccess, Failed
+    int32 obligations_processed = 3;
+    repeated NetPosition net_positions = 4;
+    repeated SettlementInstructionProto settlement_instructions = 5;
+    string total_saved = 6;
+    double efficiency = 7;
+    repeated ClearingError errors = 8;
+    int64 processing_time_ms = 9;
+}
+
+message RollbackResult {
+    bool success = 1;
+    string message = 2;
+    int64 window_id = 3;
+    string rolled_back_at = 4;
+    repeated string operations_rolled_back = 5;
+}
+
+message OperationStatusResponse {
+    string operation_id = 1;
+    string operation_type = 2;
+    string state = 3;  // Pending, InProgress, Committed, RolledBack, Failed
+    string started_at = 4;
+    string completed_at = 5;
+    string error_message = 6;
+}
+
+// ===== STREAMING MESSAGES =====
+
+message WindowUpdate {
+    int64 window_id = 1;
+    string event_type = 2;  // Opened, Closing, Closed, Processing, Completed, Failed
+    string timestamp = 3;
+    string details = 4;
+    map<string, string> metadata = 5;
+}
+
+message SettlementStatusUpdate {
+    int64 window_id = 1;
+    string settlement_id = 2;
+    string status = 3;  // Pending, InProgress, Completed, Failed
+    string timestamp = 4;
+    string details = 5;
+}
+
+// ===== DATA STRUCTURES =====
+
+message Window {
+    int64 id = 1;
+    string start_time = 2;
+    string end_time = 3;
+    string status = 4;  // Scheduled, Open, Closing, Closed, Processing, Settling, Completed, Failed, RolledBack
+    string region = 5;
+    int32 total_obligations = 6;
+    string total_volume = 7;
+    string netted_volume = 8;
+    string saved_amount = 9;
+    double netting_efficiency = 10;
+    repeated string settlement_instructions = 11;
+    WindowMetadata metadata = 12;
+    string created_at = 13;
+    string closed_at = 14;
+    string processed_at = 15;
+}
+
+message WindowMetadata {
+    string cutoff_time = 1;
+    int64 grace_period_seconds = 2;
+    int32 max_obligations = 3;
+    double min_netting_efficiency = 4;
+    bool auto_settle = 5;
+    bool emergency_mode = 6;
+}
+
+message NetPosition {
+    BankPair bank_pair = 1;
+    string currency = 2;
+    string gross_debit = 3;
+    string gross_credit = 4;
+    string net_amount = 5;
+    string direction = 6;  // Debit, Credit, Neutral
+    int32 obligations_count = 7;
+    double netting_ratio = 8;
+}
+
+message BankPair {
+    string bank_a = 1;
+    string bank_b = 2;
+}
+
+message SettlementInstructionProto {
+    string id = 1;
+    int64 window_id = 2;
+    string from_bank = 3;
+    string to_bank = 4;
+    string amount = 5;
+    string currency = 6;
+    string instruction_type = 7;  // NetSettlement, GrossSettlement, EmergencySettlement
+    int32 priority = 8;
+    string deadline = 9;
+    string metadata = 10;
+}
+
+message ClearingError {
+    string error_type = 1;
+    string message = 2;
+    string timestamp = 3;
+    string details = 4;
+}

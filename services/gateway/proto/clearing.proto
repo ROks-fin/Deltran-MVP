@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package clearing;
+
+option go_package = "gateway/proto/clearing";
+
+// ClearingService provides gRPC interface to clearing engine
+service ClearingService {
+  rpc GetWindowStatus(WindowStatusRequest) returns (WindowStatusResponse);
+  rpc StreamWindowEvents(StreamEventsRequest) returns (stream WindowEvent);
+}
+
+message WindowStatusRequest {
+  int64 window_id = 1;
+}
+
+message WindowStatusResponse {
+  int64 window_id = 1;
+  string status = 2;
+  int64 obligations_count = 3;
+  double total_amount = 4;
+  string opened_at = 5;
+  string closed_at = 6;
+}
+
+message StreamEventsRequest {
+  int64 window_id = 1;
+}
+
+message WindowEvent {
+  string event_type = 1;
+  int64 window_id = 2;
+  string data = 3;
+  string timestamp = 4;
+}

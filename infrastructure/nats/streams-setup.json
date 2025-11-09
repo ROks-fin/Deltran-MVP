@@ -1,0 +1,187 @@
+{
+  "streams": [
+    {
+      "name": "TRANSACTIONS",
+      "description": "Transaction lifecycle events",
+      "subjects": [
+        "events.transactions.created",
+        "events.transactions.validated",
+        "events.transactions.approved",
+        "events.transactions.rejected",
+        "events.transactions.processing",
+        "events.transactions.completed",
+        "events.transactions.failed"
+      ],
+      "retention": "limits",
+      "max_age": 604800000000000,
+      "max_msgs": 10000000,
+      "max_bytes": 1073741824,
+      "max_msg_size": 1048576,
+      "storage": "file",
+      "replicas": 1,
+      "discard": "old",
+      "duplicate_window": 120000000000
+    },
+    {
+      "name": "COMPLIANCE",
+      "description": "Compliance checks and alerts",
+      "subjects": [
+        "events.compliance.check",
+        "events.compliance.alert",
+        "events.compliance.sar",
+        "events.compliance.ctr",
+        "events.compliance.sanctions.hit",
+        "events.compliance.pep.detected"
+      ],
+      "retention": "limits",
+      "max_age": 2592000000000000,
+      "max_msgs": 5000000,
+      "max_bytes": 5368709120,
+      "storage": "file",
+      "replicas": 1,
+      "discard": "old"
+    },
+    {
+      "name": "SETTLEMENT",
+      "description": "Settlement operations and events",
+      "subjects": [
+        "events.settlement.initiated",
+        "events.settlement.validated",
+        "events.settlement.executing",
+        "events.settlement.completed",
+        "events.settlement.failed",
+        "events.settlement.rolled_back",
+        "events.settlement.reconciliation.started",
+        "events.settlement.reconciliation.completed",
+        "events.settlement.reconciliation.discrepancy"
+      ],
+      "retention": "limits",
+      "max_age": 7776000000000000,
+      "max_msgs": 5000000,
+      "max_bytes": 5368709120,
+      "storage": "file",
+      "replicas": 1,
+      "discard": "old"
+    },
+    {
+      "name": "CLEARING",
+      "description": "Clearing window operations",
+      "subjects": [
+        "events.clearing.window.opened",
+        "events.clearing.window.closing",
+        "events.clearing.window.closed",
+        "events.clearing.netting.started",
+        "events.clearing.netting.completed",
+        "events.clearing.instructions.generated"
+      ],
+      "retention": "limits",
+      "max_age": 2592000000000000,
+      "max_msgs": 1000000,
+      "max_bytes": 1073741824,
+      "storage": "file",
+      "replicas": 1,
+      "discard": "old"
+    },
+    {
+      "name": "NOTIFICATIONS",
+      "description": "Real-time notifications",
+      "subjects": [
+        "events.notifications.payment.initiated",
+        "events.notifications.payment.completed",
+        "events.notifications.settlement.completed",
+        "events.notifications.compliance.alert",
+        "events.notifications.risk.threshold",
+        "events.notifications.system.alert"
+      ],
+      "retention": "limits",
+      "max_age": 604800000000000,
+      "max_msgs": 10000000,
+      "max_bytes": 2147483648,
+      "storage": "file",
+      "replicas": 1,
+      "discard": "old"
+    },
+    {
+      "name": "REPORTING",
+      "description": "Reporting and analytics events",
+      "subjects": [
+        "events.reporting.generated",
+        "events.reporting.scheduled",
+        "events.reporting.aml.created",
+        "events.reporting.settlement.summary",
+        "events.reporting.reconciliation.report"
+      ],
+      "retention": "limits",
+      "max_age": 7776000000000000,
+      "max_msgs": 1000000,
+      "max_bytes": 10737418240,
+      "storage": "file",
+      "replicas": 1,
+      "discard": "old"
+    },
+    {
+      "name": "RISK",
+      "description": "Risk events and circuit breaker states",
+      "subjects": [
+        "events.risk.evaluated",
+        "events.risk.threshold.exceeded",
+        "events.risk.circuit.opened",
+        "events.risk.circuit.closed",
+        "events.risk.limit.adjusted"
+      ],
+      "retention": "limits",
+      "max_age": 2592000000000000,
+      "max_msgs": 5000000,
+      "max_bytes": 1073741824,
+      "storage": "file",
+      "replicas": 1,
+      "discard": "old"
+    },
+    {
+      "name": "AUDIT",
+      "description": "Audit trail for all critical operations",
+      "subjects": [
+        "events.audit.*"
+      ],
+      "retention": "limits",
+      "max_age": 15552000000000000,
+      "max_msgs": 50000000,
+      "max_bytes": 53687091200,
+      "storage": "file",
+      "replicas": 1,
+      "discard": "old"
+    }
+  ],
+  "consumers": [
+    {
+      "stream_name": "NOTIFICATIONS",
+      "durable_name": "notification-engine-consumer",
+      "deliver_policy": "all",
+      "ack_policy": "explicit",
+      "ack_wait": 30000000000,
+      "max_deliver": 3,
+      "filter_subject": "events.notifications.*",
+      "replay_policy": "instant"
+    },
+    {
+      "stream_name": "REPORTING",
+      "durable_name": "reporting-engine-consumer",
+      "deliver_policy": "all",
+      "ack_policy": "explicit",
+      "ack_wait": 300000000000,
+      "max_deliver": 3,
+      "filter_subject": "events.reporting.*",
+      "replay_policy": "instant"
+    },
+    {
+      "stream_name": "COMPLIANCE",
+      "durable_name": "compliance-tracker",
+      "deliver_policy": "all",
+      "ack_policy": "explicit",
+      "ack_wait": 60000000000,
+      "max_deliver": 3,
+      "filter_subject": "events.compliance.alert",
+      "replay_policy": "instant"
+    }
+  ]
+}

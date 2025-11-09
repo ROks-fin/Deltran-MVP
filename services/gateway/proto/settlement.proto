@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package settlement;
+
+option go_package = "gateway/proto/settlement";
+
+// SettlementService provides gRPC interface to settlement engine
+service SettlementService {
+  rpc ExecuteSettlement(SettlementRequest) returns (SettlementResponse);
+  rpc GetSettlementStatus(SettlementStatusRequest) returns (SettlementStatusResponse);
+  rpc StreamSettlementEvents(StreamEventsRequest) returns (stream SettlementEvent);
+}
+
+message SettlementRequest {
+  string settlement_id = 1;
+  string payer_bank = 2;
+  string payee_bank = 3;
+  double amount = 4;
+  string currency = 5;
+  string reference = 6;
+}
+
+message SettlementResponse {
+  string settlement_id = 1;
+  string status = 2;
+  string transaction_ref = 3;
+  string completed_at = 4;
+}
+
+message SettlementStatusRequest {
+  string settlement_id = 1;
+}
+
+message SettlementStatusResponse {
+  string settlement_id = 1;
+  string status = 2;
+  double amount = 3;
+  string currency = 4;
+  string payer_bank = 5;
+  string payee_bank = 6;
+  string created_at = 7;
+  string completed_at = 8;
+}
+
+message StreamEventsRequest {
+  string settlement_id = 1;
+}
+
+message SettlementEvent {
+  string event_type = 1;
+  string settlement_id = 2;
+  string data = 3;
+  string timestamp = 4;
+}

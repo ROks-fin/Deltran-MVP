@@ -1,0 +1,179 @@
+syntax = "proto3";
+
+package settlement;
+
+// Settlement service for executing atomic settlements with external banks
+service SettlementService {
+    // Execute settlement for an obligation
+    rpc ExecuteSettlement(SettlementRequest) returns (SettlementResponse);
+
+    // Get settlement status
+    rpc GetSettlementStatus(SettlementStatusRequest) returns (SettlementStatusResponse);
+
+    // Reconcile accounts
+    rpc ReconcileAccounts(ReconcileRequest) returns (ReconcileResponse);
+
+    // Stream settlement events in real-time
+    rpc StreamSettlementEvents(StreamRequest) returns (stream SettlementEvent);
+
+    // Get nostro account balance
+    rpc GetNostroBalance(AccountBalanceRequest) returns (AccountBalanceResponse);
+
+    // Get vostro account balance
+    rpc GetVostroBalance(AccountBalanceRequest) returns (AccountBalanceResponse);
+}
+
+// Settlement request message
+message SettlementRequest {
+    string obligation_id = 1;
+    string from_bank = 2;
+    string to_bank = 3;
+    string amount = 4;  // Decimal as string
+    string currency = 5;
+    int64 settlement_date = 6;  // Unix timestamp
+    Priority priority = 7;
+    SettlementMethod method = 8;
+    map<string, string> metadata = 9;
+}
+
+// Settlement response message
+message SettlementResponse {
+    string settlement_id = 1;
+    SettlementStatus status = 2;
+    string reference = 3;
+    int64 completed_at = 4;  // Unix timestamp
+    string confirmation_code = 5;
+    string message = 6;
+}
+
+// Settlement status request
+message SettlementStatusRequest {
+    string settlement_id = 1;
+}
+
+// Settlement status response
+message SettlementStatusResponse {
+    string settlement_id = 1;
+    SettlementStatus status = 2;
+    string from_bank = 3;
+    string to_bank = 4;
+    string amount = 5;
+    string currency = 6;
+    int64 created_at = 7;
+    int64 completed_at = 8;
+    string error_message = 9;
+    repeated CheckpointInfo checkpoints = 10;
+}
+
+// Checkpoint information
+message CheckpointInfo {
+    string name = 1;
+    int64 timestamp = 2;
+    string status = 3;
+}
+
+// Reconciliation request
+message ReconcileRequest {
+    repeated string account_ids = 1;  // Empty for all accounts
+    bool force = 2;  // Force reconciliation even if not scheduled
+}
+
+// Reconciliation response
+message ReconcileResponse {
+    string report_id = 1;
+    int64 timestamp = 2;
+    int32 total_accounts = 3;
+    int32 balanced_accounts = 4;
+    int32 discrepancy_accounts = 5;
+    string total_discrepancy = 6;
+    repeated AccountDiscrepancy discrepancies = 7;
+}
+
+// Account discrepancy details
+message AccountDiscrepancy {
+    string account_id = 1;
+    string account_type = 2;  // nostro or vostro
+    string bank = 3;
+    string currency = 4;
+    string internal_balance = 5;
+    string external_balance = 6;
+    string discrepancy = 7;
+    ReconciliationStatus status = 8;
+}
+
+// Stream request for events
+message StreamRequest {
+    repeated string settlement_ids = 1;  // Empty for all
+    repeated string banks = 2;  // Filter by banks
+}
+
+// Settlement event
+message SettlementEvent {
+    string event_id = 1;
+    string settlement_id = 2;
+    EventType event_type = 3;
+    int64 timestamp = 4;
+    string message = 5;
+    map<string, string> data = 6;
+}
+
+// Account balance request
+message AccountBalanceRequest {
+    string bank = 1;
+    string currency = 2;
+}
+
+// Account balance response
+message AccountBalanceResponse {
+    string account_id = 1;
+    string bank = 2;
+    string currency = 3;
+    string ledger_balance = 4;
+    string available_balance = 5;
+    string locked_balance = 6;
+    bool is_active = 7;
+    int64 last_reconciled = 8;
+}
+
+// Enums
+enum SettlementStatus {
+    PENDING = 0;
+    VALIDATING = 1;
+    FUNDS_LOCKED = 2;
+    EXECUTING = 3;
+    CONFIRMING = 4;
+    COMPLETED = 5;
+    FAILED = 6;
+    ROLLED_BACK = 7;
+}
+
+enum Priority {
+    NORMAL = 0;
+    HIGH = 1;
+    URGENT = 2;
+}
+
+enum SettlementMethod {
+    SWIFT = 0;
+    SEPA = 1;
+    LOCAL_ACH = 2;
+    MOCK = 3;
+}
+
+enum EventType {
+    SETTLEMENT_CREATED = 0;
+    SETTLEMENT_VALIDATED = 1;
+    FUNDS_LOCKED_EVENT = 2;
+    TRANSFER_INITIATED = 3;
+    TRANSFER_CONFIRMED = 4;
+    SETTLEMENT_COMPLETED = 5;
+    SETTLEMENT_FAILED = 6;
+    SETTLEMENT_ROLLED_BACK = 7;
+}
+
+enum ReconciliationStatus {
+    BALANCED = 0;
+    UNRESOLVED = 1;
+    IDENTIFIED = 2;
+    INVESTIGATION_REQUIRED = 3;
+}

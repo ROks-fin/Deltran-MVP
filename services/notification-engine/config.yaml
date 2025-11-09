@@ -1,0 +1,55 @@
+server:
+  http_port: 8085
+  ws_port: 8086
+  read_timeout: 10s
+  write_timeout: 10s
+  idle_timeout: 120s
+
+nats:
+  url: nats://localhost:4222
+  cluster_id: deltran-cluster
+  client_id: notification-engine
+
+database:
+  host: localhost
+  port: 5432
+  name: deltran
+  user: deltran
+  password: deltran_password
+  max_connections: 25
+  ssl_mode: disable
+
+redis:
+  address: localhost:6379
+  password: ""
+  db: 2
+
+email:
+  provider: smtp
+  api_key: ""
+  from_address: noreply@deltran.com
+  from_name: DelTran
+  smtp_host: localhost
+  smtp_port: 1025
+
+sms:
+  provider: twilio
+  account_sid: ""
+  auth_token: ""
+  from_number: "+1234567890"
+  mock_mode: true
+
+websocket:
+  ping_interval: 30s
+  pong_wait: 60s
+  write_timeout: 10s
+  max_message_size: 524288
+
+rate_limiting:
+  email_per_hour: 10
+  sms_per_hour: 5
+  push_per_hour: 50
+
+monitoring:
+  prometheus_enabled: true
+  metrics_port: 9095

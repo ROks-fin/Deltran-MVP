@@ -1,0 +1,4 @@
+# [env]
+# Enable SQLx offline mode to allow compilation without database connection
+# Note: SQLX_OFFLINE is now set per-service in build.rs files
+# SQLX_OFFLINE = "true"
