@@ -1,4 +1,5 @@
 use crate::error::{Result, SettlementError};
+use crate::settlement::executor::SettlementStatus;
 use chrono::Utc;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -127,7 +128,8 @@ impl RollbackManager {
         for lock in expired_locks {
             warn!(
                 "Releasing expired lock {} for settlement {}",
-                lock.id, lock.settlement_id
+                lock.id,
+                lock.settlement_id.map(|u| u.to_string()).unwrap_or_else(|| "unknown".to_string())
             );
 
             // Update lock status
@@ -212,7 +214,7 @@ impl RollbackManager {
                 failed_at = NULL
             WHERE id = $2
             "#,
-            settlement.retry_count + 1,
+            settlement.retry_count.unwrap_or(0) + 1,
             settlement_id
         )
         .execute(&*self.db_pool)

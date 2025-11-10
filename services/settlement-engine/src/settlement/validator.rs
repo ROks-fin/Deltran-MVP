@@ -231,7 +231,7 @@ impl SettlementValidator {
             Some(row) => Ok((
                 true,
                 row.is_active.unwrap_or(false),
-                row.available_balance.unwrap_or(Decimal::ZERO),
+                row.available_balance,
             )),
             None => Ok((false, false, Decimal::ZERO)),
         }
@@ -276,17 +276,29 @@ impl SettlementValidator {
         match window {
             Some(w) => {
                 // Check if today is a valid day
-                if let Some(days) = w.days_of_week {
-                    if !days.contains(&day_of_week) {
-                        return Err(SettlementError::SettlementWindowClosed(format!(
-                            "Not a valid settlement day for {}",
-                            currency
-                        )));
+                if let Some(days_json_value) = w.days_of_week {
+                    // Parse the JSON string to a Value
+                    if let Ok(days_parsed) = serde_json::from_str::<serde_json::Value>(&days_json_value) {
+                        if let Some(days_array) = days_parsed.as_array() {
+                            let day_numbers: Vec<i32> = days_array
+                                .iter()
+                                .filter_map(|v| v.as_i64().map(|n| n as i32))
+                                .collect();
+
+                            if !day_numbers.contains(&day_of_week) {
+                                return Err(SettlementError::SettlementWindowClosed(format!(
+                                    "Not a valid settlement day for {}",
+                                    currency
+                                )));
+                            }
+                        }
                     }
                 }
 
                 // Check if current time is within window
-                if let (Some(start), Some(end)) = (w.window_start, w.window_end) {
+                let start = w.window_start;
+                let end = w.window_end;
+                {
                     let current_seconds = current_time.hour() * 3600
                         + current_time.minute() * 60
                         + current_time.second();

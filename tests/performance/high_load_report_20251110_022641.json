@@ -1,0 +1,34 @@
+{
+  "test_type": "high_load_stress_test",
+  "target_tps": 3000,
+  "timestamp": "2025-11-10T02:26:41.330947",
+  "config": {
+    "concurrent_users": 150,
+    "planned_duration": 60,
+    "actual_duration": 281.55574083328247,
+    "requests_per_user": 1200
+  },
+  "results": {
+    "total_requests": 180000,
+    "successful": 0,
+    "failed": 180000,
+    "success_rate": 0.0,
+    "actual_tps": 639.3050252403958,
+    "target_achievement_pct": 21.310167508013194
+  },
+  "latency": {
+    "min": 1.6629695892333984,
+    "avg": 212.22828019368117,
+    "median": 203.51886749267578,
+    "p95": 345.9358215332031,
+    "p99": 425.66585540771484,
+    "max": 650.1736640930176
+  },
+  "status_codes": {
+    "401": 48138
+  },
+  "errors": {
+    "unauthorized": 48138,
+    "connection_error": 131862
+  }
+}

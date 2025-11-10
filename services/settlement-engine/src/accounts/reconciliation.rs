@@ -16,7 +16,7 @@ pub struct ReconciliationReport {
     pub report_date: DateTime<Utc>,
     pub total_accounts: i32,
     pub balanced_accounts: i32,
-    pub discrepancy_accounts: i32,
+    pub discrepancy_accounts: serde_json::Value,
     pub total_discrepancy: Decimal,
     pub discrepancies: Vec<AccountDiscrepancy>,
 }
@@ -163,7 +163,7 @@ impl ReconciliationEngine {
             report_date,
             total_accounts,
             balanced_accounts,
-            discrepancy_accounts,
+            discrepancy_accounts: serde_json::json!(discrepancy_accounts),
             total_discrepancy,
             discrepancies: discrepancies.clone(),
         };
@@ -376,8 +376,8 @@ impl ReconciliationEngine {
                     report_date: r.report_date.and_hms_opt(0, 0, 0).unwrap().and_utc(),
                     total_accounts: r.total_accounts,
                     balanced_accounts: r.balanced_accounts,
-                    discrepancy_accounts: r.discrepancy_accounts,
-                    total_discrepancy: r.total_discrepancy.unwrap_or(Decimal::ZERO),
+                    discrepancy_accounts: r.discrepancy_accounts.unwrap_or(serde_json::json!(0)),
+                    total_discrepancy: r.total_discrepancy,
                     discrepancies,
                 }))
             }
@@ -392,7 +392,7 @@ impl ReconciliationEngine {
             Ok(report) => {
                 info!(
                     "Scheduled reconciliation completed: {} discrepancies found",
-                    report.discrepancy_accounts
+                    report.discrepancy_accounts.as_i64().unwrap_or(0)
                 );
                 Ok(())
             }

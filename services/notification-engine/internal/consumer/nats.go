@@ -37,7 +37,30 @@ func NewEventConsumer(natsURL string, logger *zap.Logger) (*EventConsumer, error
 		return nil, fmt.Errorf("failed to create JetStream context: %w", err)
 	}
 
-	logger.Info("Connected to NATS JetStream", zap.String("url", natsURL))
+	// Create or update the EVENTS stream for notification events
+	streamName := "EVENTS"
+	streamConfig := &nats.StreamConfig{
+		Name:     streamName,
+		Subjects: []string{"events.>"},  // Use only wildcard pattern to catch all events
+		Storage:  nats.FileStorage,
+		MaxAge:   24 * time.Hour, // Keep events for 24 hours
+	}
+
+	// Try to add the stream, ignore error if it already exists
+	streamInfo, err := js.AddStream(streamConfig)
+	if err != nil {
+		// Stream might already exist, try to get its info
+		streamInfo, err = js.StreamInfo(streamName)
+		if err != nil {
+			logger.Warn("Failed to create/verify NATS stream", zap.Error(err))
+		} else {
+			logger.Info("NATS stream already exists", zap.String("stream", streamInfo.Config.Name))
+		}
+	} else {
+		logger.Info("Created NATS stream", zap.String("stream", streamInfo.Config.Name))
+	}
+
+	logger.Info("Connected to NATS JetStream", zap.String("url", natsURL), zap.String("stream", streamName))
 
 	return &EventConsumer{
 		conn:      conn,

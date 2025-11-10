@@ -20,7 +20,6 @@ async fn main() -> anyhow::Result<()> {
             tracing_subscriber::EnvFilter::from_default_env()
                 .add_directive(tracing::Level::INFO.into()),
         )
-        .json()
         .init();
 
     info!("Settlement Engine starting...");

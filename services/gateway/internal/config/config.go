@@ -75,9 +75,9 @@ func Load() *Config {
 			RiskEngine:       getEnv("RISK_ENGINE_URL", "http://risk-engine:8084"),
 			ComplianceEngine: getEnv("COMPLIANCE_ENGINE_URL", "http://compliance-engine:8086"),
 			ClearingEngine:   getEnv("CLEARING_ENGINE_URL", "http://clearing-engine:8085"),
-			SettlementEngine: getEnv("SETTLEMENT_ENGINE_URL", "http://settlement-engine:8087"),
+			SettlementEngine: getEnv("SETTLEMENT_ENGINE_URL", "http://settlement-engine:8088"),
 			NotificationEngine: getEnv("NOTIFICATION_ENGINE_URL", "http://notification-engine:8089"),
-			ReportingEngine:  getEnv("REPORTING_ENGINE_URL", "http://reporting-engine:8088"),
+			ReportingEngine:  getEnv("REPORTING_ENGINE_URL", "http://reporting-engine:8087"),
 		},
 		Auth: AuthConfig{
 			JWTSecret:     getEnv("JWT_SECRET", "deltran-secret-key-change-in-production"),

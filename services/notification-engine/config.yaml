@@ -1,6 +1,6 @@
 server:
-  http_port: 8085
-  ws_port: 8086
+  http_port: 8089
+  ws_port: 8090
   read_timeout: 10s
   write_timeout: 10s
   idle_timeout: 120s
@@ -15,7 +15,7 @@ database:
   port: 5432
   name: deltran
   user: deltran
-  password: deltran_password
+  password: deltran_secure_pass_2024
   max_connections: 25
   ssl_mode: disable
 

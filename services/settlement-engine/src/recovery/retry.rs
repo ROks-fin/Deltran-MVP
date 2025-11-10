@@ -32,7 +32,7 @@ impl RetryManager {
             SettlementError::Internal(format!("Settlement {} not found", settlement_id))
         })?;
 
-        Ok(settlement.retry_count < self.config.settlement.max_retry_attempts as i32)
+        Ok(settlement.retry_count.unwrap_or(0) < self.config.settlement.max_retry_attempts as i32)
     }
 
     pub async fn increment_retry_count(&self, settlement_id: Uuid) -> Result<i32> {
@@ -50,7 +50,7 @@ impl RetryManager {
         .fetch_one(&*self.db_pool)
         .await?;
 
-        Ok(result.retry_count)
+        Ok(result.retry_count.unwrap_or(0))
     }
 
     pub async fn mark_for_retry(&self, settlement_id: Uuid) -> Result<()> {

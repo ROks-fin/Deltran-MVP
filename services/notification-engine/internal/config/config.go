@@ -106,8 +106,8 @@ func Load(configPath string) (*Config, error) {
 }
 
 func setDefaults() {
-	viper.SetDefault("server.http_port", 8085)
-	viper.SetDefault("server.ws_port", 8086)
+	viper.SetDefault("server.http_port", 8089)
+	viper.SetDefault("server.ws_port", 8090)
 	viper.SetDefault("server.read_timeout", "10s")
 	viper.SetDefault("server.write_timeout", "10s")
 	viper.SetDefault("server.idle_timeout", "120s")

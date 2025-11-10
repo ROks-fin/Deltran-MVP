@@ -143,7 +143,7 @@ impl SettlementExecutor {
             request.currency,
             SettlementStatus::Pending.to_string(),
             serde_json::to_string(&request.priority)?,
-            request.settlement_date,
+            request.settlement_date.date_naive(),
             request.metadata,
             Utc::now()
         )

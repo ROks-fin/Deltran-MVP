@@ -110,7 +110,7 @@ impl Config {
         }
 
         if let Ok(nats_url) = env::var("NATS_URL") {
-            builder = builder.set_override("nats.brokers", nats_url)?;
+            builder = builder.set_override("nats.url", nats_url)?;
         }
 
         if let Ok(port) = env::var("OBLIGATION_ENGINE_PORT") {

@@ -210,7 +210,7 @@ impl SettlementService for SettlementGrpcServer {
                     timestamp: report.report_date.timestamp(),
                     total_accounts: report.total_accounts,
                     balanced_accounts: report.balanced_accounts,
-                    discrepancy_accounts: report.discrepancy_accounts,
+                    discrepancy_accounts: report.discrepancy_accounts.as_i64().unwrap_or(0) as i32,
                     total_discrepancy: report.total_discrepancy.to_string(),
                     discrepancies,
                 }))
@@ -254,7 +254,7 @@ impl SettlementService for SettlementGrpcServer {
                 ledger_balance: account.ledger_balance.to_string(),
                 available_balance: account.available_balance.to_string(),
                 locked_balance: account.locked_balance.to_string(),
-                is_active: account.is_active,
+                is_active: account.is_active.unwrap_or(true),
                 last_reconciled: account
                     .last_reconciled
                     .map(|t| t.timestamp())
@@ -282,7 +282,7 @@ impl SettlementService for SettlementGrpcServer {
                 ledger_balance: account.ledger_balance.to_string(),
                 available_balance: account.ledger_balance.to_string(), // Vostro has no locked balance
                 locked_balance: "0".to_string(),
-                is_active: account.is_active,
+                is_active: account.is_active.unwrap_or(true),
                 last_reconciled: 0, // Vostro doesn't track reconciliation
             })),
             Err(e) => Err(Status::not_found(format!("Vostro account not found: {}", e))),

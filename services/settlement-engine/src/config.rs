@@ -74,7 +74,7 @@ impl Config {
         let http_port = env::var("HTTP_PORT")
             .ok()
             .and_then(|p| p.parse().ok())
-            .unwrap_or(8086);
+            .unwrap_or(8088);
 
         Ok(Config {
             server: ServerConfig {

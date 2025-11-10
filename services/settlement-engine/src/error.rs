@@ -62,6 +62,12 @@ pub enum SettlementError {
     #[error("Decimal parse error: {0}")]
     DecimalParse(#[from] rust_decimal::Error),
 
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Address parse error: {0}")]
+    AddrParse(#[from] std::net::AddrParseError),
+
     #[error("Internal error: {0}")]
     Internal(String),
 }

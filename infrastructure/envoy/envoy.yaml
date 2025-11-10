@@ -31,7 +31,82 @@ static_resources:
             - name: deltran_backend
               domains: ["*"]
               routes:
-              # API v1 routes
+              # Token Engine routes (direct to service)
+              - match:
+                  prefix: "/api/v1/tokens/"
+                route:
+                  cluster: token_engine_cluster
+                  timeout: 30s
+                  retry_policy:
+                    retry_on: "5xx,reset,connect-failure,refused-stream"
+                    num_retries: 3
+                    per_try_timeout: 10s
+
+              # Settlement Engine routes (direct to service)
+              - match:
+                  prefix: "/api/v1/accounts/"
+                route:
+                  cluster: settlement_engine_cluster
+                  timeout: 30s
+                  retry_policy:
+                    retry_on: "5xx,reset,connect-failure,refused-stream"
+                    num_retries: 3
+                    per_try_timeout: 10s
+
+              # Reporting Engine routes (direct to service)
+              - match:
+                  prefix: "/api/v1/reports/"
+                route:
+                  cluster: reporting_engine_cluster
+                  timeout: 60s
+                  retry_policy:
+                    retry_on: "5xx,reset,connect-failure,refused-stream"
+                    num_retries: 2
+                    per_try_timeout: 30s
+
+              # Notification Engine routes (direct to service)
+              - match:
+                  prefix: "/api/v1/notifications/"
+                route:
+                  cluster: notification_engine_cluster
+                  timeout: 30s
+
+              # Clearing Engine routes (direct to service)
+              - match:
+                  prefix: "/api/v1/clearing/"
+                route:
+                  cluster: clearing_engine_cluster
+                  timeout: 30s
+
+              # Compliance Engine routes (direct to service)
+              - match:
+                  prefix: "/api/v1/compliance/"
+                route:
+                  cluster: compliance_engine_cluster
+                  timeout: 30s
+
+              # Risk Engine routes (direct to service)
+              - match:
+                  prefix: "/api/v1/risk/"
+                route:
+                  cluster: risk_engine_cluster
+                  timeout: 15s
+
+              # Liquidity Router routes (direct to service)
+              - match:
+                  prefix: "/api/v1/liquidity/"
+                route:
+                  cluster: liquidity_router_cluster
+                  timeout: 30s
+
+              # Obligation Engine routes (direct to service)
+              - match:
+                  prefix: "/api/v1/obligations/"
+                route:
+                  cluster: obligation_engine_cluster
+                  timeout: 30s
+
+              # Gateway routes (for auth, transfers, etc.)
               - match:
                   prefix: "/api/v1/"
                 route:
@@ -78,7 +153,7 @@ static_resources:
               - match:
                   prefix: "/ws"
                 route:
-                  cluster: notification_cluster
+                  cluster: notification_engine_cluster
                   timeout: 0s  # No timeout for WebSocket
                   upgrade_configs:
                   - upgrade_type: websocket
@@ -280,30 +355,6 @@ static_resources:
             initial_stream_window_size: 65536
             initial_connection_window_size: 1048576
 
-  # Notification service cluster (WebSocket)
-  - name: notification_cluster
-    type: STRICT_DNS
-    lb_policy: ROUND_ROBIN
-    load_assignment:
-      cluster_name: notification_cluster
-      endpoints:
-      - lb_endpoints:
-        - endpoint:
-            address:
-              socket_address:
-                address: notification-engine
-                port_value: 8089
-
-    health_checks:
-    - timeout: 5s
-      interval: 10s
-      unhealthy_threshold: 3
-      healthy_threshold: 2
-      http_health_check:
-        path: /health
-
-    connect_timeout: 5s
-
   # Prometheus cluster for metrics
   - name: prometheus_cluster
     type: STRICT_DNS
@@ -318,6 +369,267 @@ static_resources:
                 address: prometheus
                 port_value: 9090
     connect_timeout: 5s
+
+  # Token Engine cluster
+  - name: token_engine_cluster
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: token_engine_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: token-engine
+                port_value: 8081
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: /api/v1/tokens/health
+    connect_timeout: 5s
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 500
+        max_pending_requests: 500
+        max_requests: 500
+        max_retries: 3
+
+  # Settlement Engine cluster
+  - name: settlement_engine_cluster
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: settlement_engine_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: settlement-engine
+                port_value: 8087
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: /health
+    connect_timeout: 5s
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 500
+        max_pending_requests: 500
+        max_requests: 500
+        max_retries: 3
+
+  # Reporting Engine cluster
+  - name: reporting_engine_cluster
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: reporting_engine_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: reporting-engine
+                port_value: 8088
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: /health
+    connect_timeout: 5s
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 300
+        max_pending_requests: 300
+        max_requests: 300
+        max_retries: 2
+
+  # Obligation Engine cluster
+  - name: obligation_engine_cluster
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: obligation_engine_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: obligation-engine
+                port_value: 8082
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: /health
+    connect_timeout: 5s
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 500
+        max_pending_requests: 500
+        max_requests: 500
+        max_retries: 3
+
+  # Liquidity Router cluster
+  - name: liquidity_router_cluster
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: liquidity_router_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: liquidity-router
+                port_value: 8083
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: /health
+    connect_timeout: 5s
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 500
+        max_pending_requests: 500
+        max_requests: 500
+        max_retries: 3
+
+  # Risk Engine cluster
+  - name: risk_engine_cluster
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: risk_engine_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: risk-engine
+                port_value: 8084
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: /health
+    connect_timeout: 5s
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 500
+        max_pending_requests: 500
+        max_requests: 500
+        max_retries: 3
+
+  # Clearing Engine cluster
+  - name: clearing_engine_cluster
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: clearing_engine_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: clearing-engine
+                port_value: 8085
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: /health
+    connect_timeout: 5s
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 500
+        max_pending_requests: 500
+        max_requests: 500
+        max_retries: 3
+
+  # Compliance Engine cluster
+  - name: compliance_engine_cluster
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: compliance_engine_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: compliance-engine
+                port_value: 8086
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: /health
+    connect_timeout: 5s
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 500
+        max_pending_requests: 500
+        max_requests: 500
+        max_retries: 3
+
+  # Notification Engine cluster (updated reference)
+  - name: notification_engine_cluster
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: notification_engine_cluster
+      endpoints:
+      - lb_endpoints:
+        - endpoint:
+            address:
+              socket_address:
+                address: notification-engine
+                port_value: 8089
+    health_checks:
+    - timeout: 5s
+      interval: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 2
+      http_health_check:
+        path: /health
+    connect_timeout: 5s
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 1000
+        max_pending_requests: 1000
+        max_requests: 1000
+        max_retries: 2
 
 # Layered runtime configuration
 layered_runtime:

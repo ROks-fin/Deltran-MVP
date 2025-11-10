@@ -1,7 +1,7 @@
 use crate::accounts::{NostroAccountManager, ReconciliationEngine, VostroAccountManager};
 use crate::config::Config;
 use crate::error::Result;
-use crate::grpc::server::proto::settlement_service_server::SettlementServiceServer;
+use crate::grpc::server::settlement::settlement_service_server::SettlementServiceServer;
 use crate::grpc::SettlementGrpcServer;
 use crate::integration::BankClientManager;
 use crate::recovery::{CompensationManager, RetryManager};
@@ -203,7 +203,7 @@ impl SettlementServer {
                         ledger_balance: a.ledger_balance.to_string(),
                         available_balance: a.available_balance.to_string(),
                         locked_balance: a.locked_balance.to_string(),
-                        is_active: a.is_active,
+                        is_active: a.is_active.unwrap_or(true),
                     })
                     .collect();
                 HttpResponse::Ok().json(response)
@@ -226,7 +226,7 @@ impl SettlementServer {
                         ledger_balance: a.ledger_balance.to_string(),
                         available_balance: a.ledger_balance.to_string(),
                         locked_balance: "0".to_string(),
-                        is_active: a.is_active,
+                        is_active: a.is_active.unwrap_or(true),
                     })
                     .collect();
                 HttpResponse::Ok().json(response)

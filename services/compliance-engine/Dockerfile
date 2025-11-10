@@ -3,14 +3,19 @@ FROM rust:1.75 AS builder
 
 WORKDIR /app
 
+# Copy manifests
 COPY Cargo.toml ./
+
+# Copy source code
 COPY src ./src
 
+# Build for release
 RUN cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim
 
+# Install dependencies
 RUN apt-get update && apt-get install -y \
     libssl3 \
     ca-certificates \
@@ -18,13 +23,15 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/liquidity-router /app/liquidity-router
+# Copy the binary from builder
+COPY --from=builder /app/target/release/compliance-engine /app/compliance-engine
 
+# Create a non-root user
 RUN useradd -m -u 1001 -s /bin/bash deltran && \
     chown -R deltran:deltran /app
 
 USER deltran
 
-EXPOSE 8083
+EXPOSE 8086
 
-CMD ["./liquidity-router"]
+CMD ["./compliance-engine"]

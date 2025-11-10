@@ -15,7 +15,7 @@ pub struct VostroAccount {
     pub currency: String,
     pub ledger_balance: Decimal,
     pub credit_limit: Option<Decimal>,
-    pub is_active: bool,
+    pub is_active: Option<bool>,
     pub created_at: DateTime<Utc>,
 }
 

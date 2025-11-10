@@ -17,7 +17,7 @@ pub struct NostroAccount {
     pub available_balance: Decimal,
     pub locked_balance: Decimal,
     pub last_reconciled: Option<DateTime<Utc>>,
-    pub is_active: bool,
+    pub is_active: Option<bool>,
     pub created_at: DateTime<Utc>,
 }
 
