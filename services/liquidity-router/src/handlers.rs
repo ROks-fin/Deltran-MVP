@@ -38,10 +38,14 @@ pub async fn optimize_conversion(
 }
 
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/api/v1/liquidity")
-            .route("/health", web::get().to(health_check))
-            .route("/predict", web::post().to(predict_liquidity))
-            .route("/optimize/{from}/{to}", web::get().to(optimize_conversion)),
-    );
+    cfg
+        // Root-level health endpoint for monitoring
+        .route("/health", web::get().to(health_check))
+        .route("/metrics", web::get().to(health_check)) // Placeholder for Prometheus metrics
+        .service(
+            web::scope("/api/v1/liquidity")
+                .route("/health", web::get().to(health_check))
+                .route("/predict", web::post().to(predict_liquidity))
+                .route("/optimize/{from}/{to}", web::get().to(optimize_conversion)),
+        );
 }

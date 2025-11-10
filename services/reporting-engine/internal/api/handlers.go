@@ -34,6 +34,10 @@ func NewReportHandler(
 }
 
 func (h *ReportHandler) RegisterRoutes(router *mux.Router) {
+	// Root-level health endpoint for monitoring
+	router.HandleFunc("/health", h.healthCheck).Methods("GET")
+	router.HandleFunc("/metrics", h.metricsEndpoint).Methods("GET")
+
 	api := router.PathPrefix("/api/v1").Subrouter()
 
 	// Report generation and management
@@ -296,6 +300,13 @@ func (h *ReportHandler) healthCheck(w http.ResponseWriter, r *http.Request) {
 		"version": "1.0.0",
 		"time":    time.Now().Format(time.RFC3339),
 	})
+}
+
+func (h *ReportHandler) metricsEndpoint(w http.ResponseWriter, r *http.Request) {
+	// Placeholder for Prometheus metrics
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "# Prometheus metrics placeholder\n")
 }
 
 func (h *ReportHandler) respondJSON(w http.ResponseWriter, status int, data interface{}) {

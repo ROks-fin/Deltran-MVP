@@ -86,15 +86,20 @@ type MonitoringConfig struct {
 
 // Load loads configuration from file and environment
 func Load(configPath string) (*Config, error) {
-	viper.SetConfigFile(configPath)
-	viper.SetConfigType("yaml")
-	viper.AutomaticEnv()
-
-	// Set defaults
+	// Set defaults first
 	setDefaults()
 
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("failed to read config: %w", err)
+	viper.AutomaticEnv()
+
+	// Try to load config file if provided, but don't fail if it doesn't exist
+	if configPath != "" {
+		viper.SetConfigFile(configPath)
+		viper.SetConfigType("yaml")
+
+		if err := viper.ReadInConfig(); err != nil {
+			// Config file not required - just use defaults and env vars
+			fmt.Printf("Config file not found, using defaults and environment variables: %v\n", err)
+		}
 	}
 
 	var config Config
@@ -112,18 +117,19 @@ func setDefaults() {
 	viper.SetDefault("server.write_timeout", "10s")
 	viper.SetDefault("server.idle_timeout", "120s")
 
-	viper.SetDefault("nats.url", "nats://localhost:4222")
+	viper.SetDefault("nats.url", "nats://nats:4222")
 	viper.SetDefault("nats.cluster_id", "deltran-cluster")
 	viper.SetDefault("nats.client_id", "notification-engine")
 
-	viper.SetDefault("database.host", "localhost")
+	viper.SetDefault("database.host", "postgres")
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.name", "deltran")
 	viper.SetDefault("database.user", "deltran")
+	viper.SetDefault("database.password", "deltran_secure_pass_2024")
 	viper.SetDefault("database.max_connections", 25)
 	viper.SetDefault("database.ssl_mode", "disable")
 
-	viper.SetDefault("redis.address", "localhost:6379")
+	viper.SetDefault("redis.address", "redis:6379")
 	viper.SetDefault("redis.db", 2)
 
 	viper.SetDefault("email.provider", "smtp")

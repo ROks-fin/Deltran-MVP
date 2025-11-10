@@ -1,0 +1,229 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "deltran-overview",
+    "title": "DelTran MVP - Services Overview",
+    "tags": ["deltran", "mvp", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Transaction Throughput (Requests/sec)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{path=~\"/api/v1/transfer|/tokens/mint|/obligations/create\"}[1m])",
+            "legendFormat": "{{service}} - {{method}} {{path}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Service Health Status",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "up{job=~\"gateway|token-engine|obligation-engine|clearing-engine|settlement-engine|notification-engine|reporting-engine|analytics-collector\"}",
+            "legendFormat": "{{job}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "none",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}}},
+              {"type": "value", "options": {"1": {"text": "UP", "color": "green"}}}
+            ],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "red"},
+                {"value": 1, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Request Latency P95 (seconds)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{service}} - {{path}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Latency"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Error Rate (5xx responses/sec)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
+            "legendFormat": "{{service}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Errors/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Active Tokens (Token Engine)",
+        "type": "gauge",
+        "gridPos": {"x": 0, "y": 16, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "active_tokens",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 1000000, "color": "yellow"},
+                {"value": 5000000, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "WebSocket Connections (Notification Engine)",
+        "type": "graph",
+        "gridPos": {"x": 6, "y": 16, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "active_websockets",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Transaction Success Rate (%)",
+        "type": "gauge",
+        "gridPos": {"x": 12, "y": 16, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(deltran_transactions_total{status=\"completed\"}[5m]) / rate(deltran_transactions_total[5m]) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "red"},
+                {"value": 95, "color": "yellow"},
+                {"value": 99, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Database Query Duration P95 (seconds)",
+        "type": "graph",
+        "gridPos": {"x": 18, "y": 16, "w": 6, "h": 6},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(db_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{service}} - {{operation}} {{table}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "title": "NATS Messages Published/sec",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 22, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(nats_messages_published_total[5m])",
+            "legendFormat": "{{service}} - {{subject}} ({{status}})",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Messages/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Cache Hit Rate (%)",
+        "type": "gauge",
+        "gridPos": {"x": 12, "y": 22, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "red"},
+                {"value": 70, "color": "yellow"},
+                {"value": 90, "color": "green"}
+              ]
+            }
+          }
+        }
+      }
+    ]
+  }
+}

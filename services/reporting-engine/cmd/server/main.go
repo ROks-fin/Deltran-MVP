@@ -142,10 +142,8 @@ func loadConfig() (*config.Config, error) {
 		// Try to load from default locations
 		if _, err := os.Stat("config.yaml"); err == nil {
 			configPath = "config.yaml"
-		} else {
-			// Use default configuration
-			return config.Default(), nil
 		}
+		// If no config file found, Load will use defaults from Viper
 	}
 
 	return config.Load(configPath)

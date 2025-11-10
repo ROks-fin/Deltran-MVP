@@ -1,0 +1,77 @@
+version: '3.8'
+
+# Упрощенный compose для запуска только микросервисов
+# Использует уже запущенную инфраструктуру (Postgres, Redis, NATS на хосте)
+
+services:
+  # Gateway Service (Go) - 8080
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    container_name: deltran-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@host.docker.internal:5432/deltran
+      - REDIS_URL=redis://host.docker.internal:6379
+      - NATS_URL=nats://host.docker.internal:4222
+      - SERVICE_PORT=8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # Token Engine (Rust) - 8081
+  token-engine:
+    build:
+      context: ./services/token-engine
+      dockerfile: Dockerfile
+    container_name: deltran-token-engine
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@host.docker.internal:5432/deltran
+      - REDIS_URL=redis://host.docker.internal:6379
+      - NATS_URL=nats://host.docker.internal:4222
+      - SERVICE_PORT=8081
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # Reporting Engine (Go) - 8087
+  reporting-engine:
+    build:
+      context: ./services/reporting-engine
+      dockerfile: Dockerfile
+    container_name: deltran-reporting-engine
+    ports:
+      - "8087:8087"
+    environment:
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@host.docker.internal:5432/deltran
+      - REDIS_URL=redis://host.docker.internal:6379
+      - NATS_URL=nats://host.docker.internal:4222
+      - SERVICE_PORT=8087
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # Notification Engine (Go) - 8089
+  notification-engine:
+    build:
+      context: ./services/notification-engine
+      dockerfile: Dockerfile
+    container_name: deltran-notification-engine
+    ports:
+      - "8089:8089"
+    environment:
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@host.docker.internal:5432/deltran
+      - REDIS_URL=redis://host.docker.internal:6379
+      - NATS_URL=nats://host.docker.internal:4222
+      - SERVICE_PORT=8089
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: deltran-microservices-network

@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::error::{Result, SettlementError};
 use chrono::Utc;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use tokio::time::Duration;
 use tracing::info;
@@ -18,51 +18,53 @@ impl RetryManager {
     }
 
     pub async fn should_retry(&self, settlement_id: Uuid) -> Result<bool> {
-        let settlement = sqlx::query!(
+        let settlement = sqlx::query(
             r#"
             SELECT retry_count
             FROM settlement_transactions
             WHERE id = $1
-            "#,
-            settlement_id
+            "#
         )
+        .bind(settlement_id)
         .fetch_optional(&*self.db_pool)
         .await?
         .ok_or_else(|| {
             SettlementError::Internal(format!("Settlement {} not found", settlement_id))
         })?;
 
-        Ok(settlement.retry_count.unwrap_or(0) < self.config.settlement.max_retry_attempts as i32)
+        let retry_count: Option<i32> = settlement.try_get("retry_count").ok();
+        Ok(retry_count.unwrap_or(0) < self.config.settlement.max_retry_attempts as i32)
     }
 
     pub async fn increment_retry_count(&self, settlement_id: Uuid) -> Result<i32> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"
             UPDATE settlement_transactions
             SET retry_count = retry_count + 1,
                 last_retry_at = $1
             WHERE id = $2
             RETURNING retry_count
-            "#,
-            Utc::now(),
-            settlement_id
+            "#
         )
+        .bind(Utc::now())
+        .bind(settlement_id)
         .fetch_one(&*self.db_pool)
         .await?;
 
-        Ok(result.retry_count.unwrap_or(0))
+        let retry_count: Option<i32> = result.try_get("retry_count").ok();
+        Ok(retry_count.unwrap_or(0))
     }
 
     pub async fn mark_for_retry(&self, settlement_id: Uuid) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE settlement_transactions
             SET status = 'PENDING',
                 error_message = NULL
             WHERE id = $1
-            "#,
-            settlement_id
+            "#
         )
+        .bind(settlement_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -72,7 +74,7 @@ impl RetryManager {
     }
 
     pub async fn get_failed_settlements(&self, limit: i64) -> Result<Vec<Uuid>> {
-        let records = sqlx::query!(
+        let records = sqlx::query(
             r#"
             SELECT id
             FROM settlement_transactions
@@ -81,14 +83,14 @@ impl RetryManager {
                 AND (last_retry_at IS NULL OR last_retry_at < NOW() - INTERVAL '5 minutes')
             ORDER BY created_at
             LIMIT $2
-            "#,
-            self.config.settlement.max_retry_attempts as i32,
-            limit
+            "#
         )
+        .bind(self.config.settlement.max_retry_attempts as i32)
+        .bind(limit)
         .fetch_all(&*self.db_pool)
         .await?;
 
-        Ok(records.into_iter().map(|r| r.id).collect())
+        Ok(records.into_iter().map(|r| r.try_get("id").unwrap()).collect())
     }
 
     pub async fn exponential_backoff(&self, retry_count: i32) -> Duration {

@@ -7,6 +7,7 @@ pub mod database;
 pub mod nats;
 pub mod netting;
 pub mod token_client;
+pub mod metrics;
 
 pub use config::Config;
 pub use errors::{ObligationEngineError, Result};

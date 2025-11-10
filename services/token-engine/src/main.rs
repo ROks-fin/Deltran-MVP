@@ -15,84 +15,56 @@ use tracing_subscriber::FmtSubscriber;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Load environment variables
     dotenv().ok();
 
-    // Initialize tracing
     let _subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
         .with_file(true)
         .with_line_number(true)
         .with_thread_ids(true)
         .with_target(false)
-        .json()
         .init();
 
-    info!("Starting Token Engine...");
-
-    // Load configuration
     let config = Config::from_env().expect("Failed to load configuration");
     config.validate().expect("Invalid configuration");
 
-    info!("Configuration loaded successfully");
+    info!("Starting Token Engine on port {}", config.server.port);
 
-    // Initialize database
     let db = Arc::new(
         Database::new(&config.database.url, config.database.max_connections)
             .await
-            .expect("Failed to connect to database"),
+            .expect("Failed to connect to database")
     );
 
-    info!("Database connected successfully");
-
-    // Initialize Redis
     let redis_client = redis::Client::open(config.redis.url.clone())
         .expect("Failed to create Redis client");
     let redis_conn = ConnectionManager::new(redis_client)
         .await
         .expect("Failed to connect to Redis");
 
-    info!("Redis connected successfully");
-
-    // Initialize NATS
-    let nats = Arc::new(
+    let nats_producer = Arc::new(
         NatsProducer::new(&config.nats.url, &config.nats.topic_prefix)
             .await
-            .expect("Failed to create NATS producer"),
+            .expect("Failed to connect to NATS")
     );
 
-    info!("NATS producer initialized successfully");
-
-    // Initialize service
-    let service = Arc::new(TokenService::new(db, nats, redis_conn).await);
-
-    info!("Token service initialized successfully");
-
-    // Start HTTP server
-    let server_config = config.server.clone();
-    let service_data = web::Data::new(service);
-
-    info!(
-        "Starting HTTP server on {}:{}",
-        server_config.host, server_config.port
-    );
+    let token_service = Arc::new(TokenService::new(
+        db,
+        nats_producer,
+        redis_conn,
+    ).await);
 
     HttpServer::new(move || {
+        let cors = Cors::permissive();
+
         App::new()
-            .app_data(service_data.clone())
-            .wrap(
-                Cors::default()
-                    .allow_any_origin()
-                    .allow_any_method()
-                    .allow_any_header()
-                    .max_age(3600),
-            )
+            .wrap(cors)
             .wrap(middleware::Logger::default())
             .wrap(middleware::NormalizePath::trim())
+            .app_data(web::Data::new(token_service.clone()))
             .configure(handlers::configure_routes)
     })
-    .workers(server_config.workers)
-    .bind((server_config.host, server_config.port))?
+    .bind(("0.0.0.0", config.server.port))?
     .run()
     .await
 }

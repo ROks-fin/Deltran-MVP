@@ -2,7 +2,7 @@ use crate::error::{Result, SettlementError};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
@@ -39,23 +39,23 @@ impl NostroAccountManager {
     ) -> Result<NostroAccount> {
         let account_id = Uuid::new_v4();
 
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO nostro_accounts (
                 id, bank, account_number, currency,
                 ledger_balance, available_balance, locked_balance,
                 is_active, created_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8)
-            "#,
-            account_id,
-            bank,
-            account_number,
-            currency,
-            initial_balance,
-            initial_balance,
-            Decimal::ZERO,
-            Utc::now()
+            "#
         )
+        .bind(account_id)
+        .bind(bank)
+        .bind(account_number)
+        .bind(currency)
+        .bind(initial_balance)
+        .bind(initial_balance)
+        .bind(Decimal::ZERO)
+        .bind(Utc::now())
         .execute(&*self.db_pool)
         .await?;
 
@@ -68,8 +68,7 @@ impl NostroAccountManager {
     }
 
     pub async fn get_account(&self, account_id: &Uuid) -> Result<NostroAccount> {
-        let account = sqlx::query_as!(
-            NostroAccount,
+        let row = sqlx::query(
             r#"
             SELECT
                 id, bank, account_number, currency,
@@ -77,16 +76,27 @@ impl NostroAccountManager {
                 last_reconciled, is_active, created_at
             FROM nostro_accounts
             WHERE id = $1
-            "#,
-            account_id
+            "#
         )
+        .bind(account_id)
         .fetch_optional(&*self.db_pool)
         .await?
         .ok_or_else(|| {
             SettlementError::AccountNotFound(format!("Nostro account {}", account_id))
         })?;
 
-        Ok(account)
+        Ok(NostroAccount {
+            id: row.try_get("id")?,
+            bank: row.try_get("bank")?,
+            account_number: row.try_get("account_number")?,
+            currency: row.try_get("currency")?,
+            ledger_balance: row.try_get("ledger_balance")?,
+            available_balance: row.try_get("available_balance")?,
+            locked_balance: row.try_get("locked_balance")?,
+            last_reconciled: row.try_get("last_reconciled").ok(),
+            is_active: row.try_get("is_active").ok(),
+            created_at: row.try_get("created_at")?,
+        })
     }
 
     pub async fn get_account_by_bank_currency(
@@ -94,8 +104,7 @@ impl NostroAccountManager {
         bank: &str,
         currency: &str,
     ) -> Result<NostroAccount> {
-        let account = sqlx::query_as!(
-            NostroAccount,
+        let row = sqlx::query(
             r#"
             SELECT
                 id, bank, account_number, currency,
@@ -103,23 +112,33 @@ impl NostroAccountManager {
                 last_reconciled, is_active, created_at
             FROM nostro_accounts
             WHERE bank = $1 AND currency = $2
-            "#,
-            bank,
-            currency
+            "#
         )
+        .bind(bank)
+        .bind(currency)
         .fetch_optional(&*self.db_pool)
         .await?
         .ok_or_else(|| {
             SettlementError::AccountNotFound(format!("Nostro account {}:{}", bank, currency))
         })?;
 
-        Ok(account)
+        Ok(NostroAccount {
+            id: row.try_get("id")?,
+            bank: row.try_get("bank")?,
+            account_number: row.try_get("account_number")?,
+            currency: row.try_get("currency")?,
+            ledger_balance: row.try_get("ledger_balance")?,
+            available_balance: row.try_get("available_balance")?,
+            locked_balance: row.try_get("locked_balance")?,
+            last_reconciled: row.try_get("last_reconciled").ok(),
+            is_active: row.try_get("is_active").ok(),
+            created_at: row.try_get("created_at")?,
+        })
     }
 
     pub async fn list_accounts(&self, bank: Option<&str>) -> Result<Vec<NostroAccount>> {
-        let accounts = if let Some(bank_code) = bank {
-            sqlx::query_as!(
-                NostroAccount,
+        let rows = if let Some(bank_code) = bank {
+            sqlx::query(
                 r#"
                 SELECT
                     id, bank, account_number, currency,
@@ -128,14 +147,13 @@ impl NostroAccountManager {
                 FROM nostro_accounts
                 WHERE bank = $1
                 ORDER BY bank, currency
-                "#,
-                bank_code
+                "#
             )
+            .bind(bank_code)
             .fetch_all(&*self.db_pool)
             .await?
         } else {
-            sqlx::query_as!(
-                NostroAccount,
+            sqlx::query(
                 r#"
                 SELECT
                     id, bank, account_number, currency,
@@ -149,6 +167,21 @@ impl NostroAccountManager {
             .await?
         };
 
+        let accounts = rows.iter().map(|row| {
+            Ok(NostroAccount {
+                id: row.try_get("id")?,
+                bank: row.try_get("bank")?,
+                account_number: row.try_get("account_number")?,
+                currency: row.try_get("currency")?,
+                ledger_balance: row.try_get("ledger_balance")?,
+                available_balance: row.try_get("available_balance")?,
+                locked_balance: row.try_get("locked_balance")?,
+                last_reconciled: row.try_get("last_reconciled").ok(),
+                is_active: row.try_get("is_active").ok(),
+                created_at: row.try_get("created_at")?,
+            })
+        }).collect::<Result<Vec<NostroAccount>>>()?;
+
         Ok(accounts)
     }
 
@@ -157,16 +190,16 @@ impl NostroAccountManager {
         account_id: &Uuid,
         new_balance: Decimal,
     ) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE nostro_accounts
             SET ledger_balance = $1,
                 available_balance = $1 - locked_balance
             WHERE id = $2
-            "#,
-            new_balance,
-            account_id
+            "#
         )
+        .bind(new_balance)
+        .bind(account_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -179,14 +212,14 @@ impl NostroAccountManager {
     }
 
     pub async fn deactivate_account(&self, account_id: &Uuid) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE nostro_accounts
             SET is_active = false
             WHERE id = $1
-            "#,
-            account_id
+            "#
         )
+        .bind(account_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -196,14 +229,14 @@ impl NostroAccountManager {
     }
 
     pub async fn activate_account(&self, account_id: &Uuid) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE nostro_accounts
             SET is_active = true
             WHERE id = $1
-            "#,
-            account_id
+            "#
         )
+        .bind(account_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -213,15 +246,15 @@ impl NostroAccountManager {
     }
 
     pub async fn update_reconciliation_timestamp(&self, account_id: &Uuid) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE nostro_accounts
             SET last_reconciled = $1
             WHERE id = $2
-            "#,
-            Utc::now(),
-            account_id
+            "#
         )
+        .bind(Utc::now())
+        .bind(account_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -229,17 +262,18 @@ impl NostroAccountManager {
     }
 
     pub async fn get_total_balance(&self, currency: &str) -> Result<Decimal> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"
             SELECT COALESCE(SUM(ledger_balance), 0) as total
             FROM nostro_accounts
             WHERE currency = $1 AND is_active = true
-            "#,
-            currency
+            "#
         )
+        .bind(currency)
         .fetch_one(&*self.db_pool)
         .await?;
 
-        Ok(result.total.unwrap_or(Decimal::ZERO))
+        let total: Option<Decimal> = result.try_get("total").ok();
+        Ok(total.unwrap_or(Decimal::ZERO))
     }
 }

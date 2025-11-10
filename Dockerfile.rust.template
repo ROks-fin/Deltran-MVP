@@ -1,0 +1,71 @@
+# ============================================
+# Эталонный Dockerfile для Rust сервисов DelTran MVP
+# ============================================
+# Использует cargo-chef для кеширования зависимостей
+# Основано на Context7 документации и Docker best practices
+#
+# Преимущества:
+# 1. Быстрая пересборка благодаря кешированию зависимостей
+# 2. Минимальный размер финального образа (Debian slim)
+# 3. Multi-stage build для оптимизации
+# 4. Security hardening (non-root user)
+#
+# Использование:
+#   docker build -t service-name:latest .
+# ============================================
+
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+WORKDIR /app
+
+# ============================================
+# Stage 1: Planner - Анализ зависимостей
+# ============================================
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ============================================
+# Stage 2: Builder - Сборка зависимостей и приложения
+# ============================================
+FROM chef AS builder
+
+# Копируем recipe.json из planner stage
+COPY --from=planner /app/recipe.json recipe.json
+
+# Собираем только зависимости - это будет кешироваться!
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# Копируем исходный код
+COPY . .
+
+# Собираем приложение
+RUN cargo build --release
+
+# ============================================
+# Stage 3: Runtime - Минимальный production образ
+# ============================================
+FROM debian:bookworm-slim AS runtime
+
+# Установка runtime зависимостей
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Создание non-root пользователя
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+WORKDIR /app
+
+# Копирование бинарника из builder stage
+# Автоматически находим бинарник в target/release/
+COPY --from=builder /app/target/release/* /app/
+
+# Переключение на non-root пользователя
+USER appuser
+
+# Expose порт (документация)
+EXPOSE 8080
+
+# Entrypoint - запуск первого найденного бинарника
+CMD ["/bin/sh", "-c", "exec $(ls /app/* | grep -v '\\.d$' | head -1)"]

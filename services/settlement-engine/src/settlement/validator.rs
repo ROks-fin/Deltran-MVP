@@ -2,7 +2,7 @@ use crate::error::{Result, SettlementError};
 use crate::settlement::executor::SettlementRequest;
 use chrono::{Datelike, Timelike, Utc};
 use rust_decimal::Decimal;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -190,19 +190,22 @@ impl SettlementValidator {
     }
 
     async fn check_bank_status(&self, bank_code: &str) -> Result<bool> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"
             SELECT is_active
             FROM banks
             WHERE bank_code = $1
-            "#,
-            bank_code
+            "#
         )
+        .bind(bank_code)
         .fetch_optional(&*self.db_pool)
         .await?;
 
         match result {
-            Some(row) => Ok(row.is_active.unwrap_or(false)),
+            Some(row) => {
+                let is_active = row.try_get::<bool, _>("is_active").unwrap_or(false);
+                Ok(is_active)
+            }
             None => Err(SettlementError::AccountNotFound(format!(
                 "Bank {} not found",
                 bank_code
@@ -215,43 +218,46 @@ impl SettlementValidator {
         bank: &str,
         currency: &str,
     ) -> Result<(bool, bool, Decimal)> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"
             SELECT is_active, available_balance
             FROM nostro_accounts
             WHERE bank = $1 AND currency = $2
-            "#,
-            bank,
-            currency
+            "#
         )
+        .bind(bank)
+        .bind(currency)
         .fetch_optional(&*self.db_pool)
         .await?;
 
         match result {
-            Some(row) => Ok((
-                true,
-                row.is_active.unwrap_or(false),
-                row.available_balance,
-            )),
+            Some(row) => {
+                let is_active = row.try_get::<bool, _>("is_active").unwrap_or(false);
+                let available_balance: Decimal = row.try_get("available_balance")?;
+                Ok((true, is_active, available_balance))
+            }
             None => Ok((false, false, Decimal::ZERO)),
         }
     }
 
     async fn check_vostro_account(&self, bank: &str, currency: &str) -> Result<(bool, bool)> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"
             SELECT is_active
             FROM vostro_accounts
             WHERE bank = $1 AND currency = $2
-            "#,
-            bank,
-            currency
+            "#
         )
+        .bind(bank)
+        .bind(currency)
         .fetch_optional(&*self.db_pool)
         .await?;
 
         match result {
-            Some(row) => Ok((true, row.is_active.unwrap_or(false))),
+            Some(row) => {
+                let is_active = row.try_get::<bool, _>("is_active").unwrap_or(false);
+                Ok((true, is_active))
+            }
             None => Ok((false, false)),
         }
     }
@@ -261,22 +267,26 @@ impl SettlementValidator {
         let current_time = now.time();
         let day_of_week = now.weekday().num_days_from_monday() as i32 + 1;
 
-        let window = sqlx::query!(
+        let window = sqlx::query(
             r#"
             SELECT window_start, window_end, days_of_week
             FROM settlement_windows
             WHERE currency = $1 AND is_active = true
             LIMIT 1
-            "#,
-            currency
+            "#
         )
+        .bind(currency)
         .fetch_optional(&*self.db_pool)
         .await?;
 
         match window {
             Some(w) => {
+                let window_start: chrono::NaiveTime = w.try_get("window_start")?;
+                let window_end: chrono::NaiveTime = w.try_get("window_end")?;
+                let days_of_week: Option<String> = w.try_get("days_of_week").ok();
+
                 // Check if today is a valid day
-                if let Some(days_json_value) = w.days_of_week {
+                if let Some(days_json_value) = days_of_week {
                     // Parse the JSON string to a Value
                     if let Ok(days_parsed) = serde_json::from_str::<serde_json::Value>(&days_json_value) {
                         if let Some(days_array) = days_parsed.as_array() {
@@ -296,24 +306,22 @@ impl SettlementValidator {
                 }
 
                 // Check if current time is within window
-                let start = w.window_start;
-                let end = w.window_end;
                 {
                     let current_seconds = current_time.hour() * 3600
                         + current_time.minute() * 60
                         + current_time.second();
-                    let start_seconds = start.hour() * 3600 + start.minute() * 60 + start.second();
-                    let end_seconds = end.hour() * 3600 + end.minute() * 60 + end.second();
+                    let start_seconds = window_start.hour() * 3600 + window_start.minute() * 60 + window_start.second();
+                    let end_seconds = window_end.hour() * 3600 + window_end.minute() * 60 + window_end.second();
 
                     if current_seconds < start_seconds || current_seconds > end_seconds {
                         return Err(SettlementError::SettlementWindowClosed(format!(
                             "Current time {:02}:{:02} is outside window {:02}:{:02}-{:02}:{:02}",
                             current_time.hour(),
                             current_time.minute(),
-                            start.hour(),
-                            start.minute(),
-                            end.hour(),
-                            end.minute()
+                            window_start.hour(),
+                            window_start.minute(),
+                            window_end.hour(),
+                            window_end.minute()
                         )));
                     }
                 }
@@ -328,19 +336,20 @@ impl SettlementValidator {
     }
 
     async fn check_duplicate_settlement(&self, obligation_id: Uuid) -> Result<bool> {
-        let count = sqlx::query!(
+        let count = sqlx::query(
             r#"
             SELECT COUNT(*) as count
             FROM settlement_transactions
             WHERE obligation_id = $1
                 AND status NOT IN ('failed', 'rolled_back')
-            "#,
-            obligation_id
+            "#
         )
+        .bind(obligation_id)
         .fetch_one(&*self.db_pool)
         .await?;
 
-        Ok(count.count.unwrap_or(0) > 0)
+        let count_val: Option<i64> = count.try_get("count").ok();
+        Ok(count_val.unwrap_or(0) > 0)
     }
 }
 

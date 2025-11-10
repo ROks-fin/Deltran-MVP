@@ -23,3 +23,16 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 config = "0.13"
 dotenv = "0.15"
 validator = { version = "0.16", features = ["derive"] }
+
+# Security - JWT authentication
+jsonwebtoken = "9.2"
+
+# Rate limiting
+governor = "0.6"
+
+# Additional utilities
+futures-util = "0.3"
+
+# Metrics - Prometheus
+prometheus = { version = "0.13", features = ["process"] }
+lazy_static = "1.4"

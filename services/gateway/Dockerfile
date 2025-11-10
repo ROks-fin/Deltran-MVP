@@ -1,30 +1,35 @@
-# Build stage
-FROM golang:1.21-alpine AS builder
+# syntax=docker/dockerfile:1
+FROM golang:1.24-alpine AS builder
+
+ENV GOTOOLCHAIN=auto
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+
+COPY . .
+
+RUN go mod tidy
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w" -a -installsuffix cgo \
+    -o /app/service ./cmd/main.go
+
+FROM alpine:3.21 AS runtime
+
+RUN apk add --no-cache ca-certificates tzdata && \
+    addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser
 
 WORKDIR /app
 
-# Copy go mod files
-COPY go.mod go.sum ./
-RUN go mod download
+COPY --from=builder --chown=appuser:appuser /app/service /app/service
 
-# Copy source code
-COPY . .
+USER appuser
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o gateway ./cmd/main.go
-
-# Runtime stage
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates
-
-WORKDIR /root/
-
-# Copy the binary from builder
-COPY --from=builder /app/gateway .
-
-# Expose port
 EXPOSE 8080
 
-# Run the application
-CMD ["./gateway"]
+ENTRYPOINT ["/app/service"]

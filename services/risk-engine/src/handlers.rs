@@ -5,7 +5,7 @@ use crate::models::*;
 use crate::scoring::RiskScorer;
 use actix_web::{web, HttpResponse};
 use serde_json::json;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -87,7 +87,7 @@ pub async fn update_limits(
 // ===== Get Risk Metrics =====
 pub async fn get_risk_metrics(pool: web::Data<PgPool>) -> Result<HttpResponse, RiskError> {
     // Get overall statistics
-    let stats = sqlx::query!(
+    let stats = sqlx::query(
         "SELECT
             COUNT(*) as total,
             COUNT(*) FILTER (WHERE decision = 'Approve') as approved,
@@ -101,7 +101,7 @@ pub async fn get_risk_metrics(pool: web::Data<PgPool>) -> Result<HttpResponse, R
     .await?;
 
     // Get high risk corridors
-    let corridors: Vec<_> = sqlx::query!(
+    let corridors: Vec<_> = sqlx::query(
         "SELECT
             t.sender_country || '-' || t.sent_currency || ' to ' ||
             t.receiver_country || '-' || t.received_currency as corridor,
@@ -120,23 +120,23 @@ pub async fn get_risk_metrics(pool: web::Data<PgPool>) -> Result<HttpResponse, R
     .await?
     .into_iter()
     .map(|row| CorridorRisk {
-        corridor: row.corridor.unwrap_or_default(),
-        risk_level: if row.avg_risk_score.unwrap_or(0.0) > 75.0 {
+        corridor: row.try_get("corridor").unwrap_or_default(),
+        risk_level: if row.try_get::<f64, _>("avg_risk_score").unwrap_or(0.0) > 75.0 {
             "High".to_string()
         } else {
             "Medium".to_string()
         },
-        transaction_count: row.transaction_count.unwrap_or(0) as u64,
-        rejection_rate: row.rejection_rate.unwrap_or(0.0),
+        transaction_count: row.try_get::<i64, _>("transaction_count").unwrap_or(0) as u64,
+        rejection_rate: row.try_get::<f64, _>("rejection_rate").unwrap_or(0.0),
     })
     .collect();
 
     let metrics = RiskMetrics {
-        total_evaluated: stats.total.unwrap_or(0) as u64,
-        approved: stats.approved.unwrap_or(0) as u64,
-        rejected: stats.rejected.unwrap_or(0) as u64,
-        under_review: stats.under_review.unwrap_or(0) as u64,
-        average_score: stats.avg_score.unwrap_or(0.0),
+        total_evaluated: stats.try_get::<i64, _>("total").unwrap_or(0) as u64,
+        approved: stats.try_get::<i64, _>("approved").unwrap_or(0) as u64,
+        rejected: stats.try_get::<i64, _>("rejected").unwrap_or(0) as u64,
+        under_review: stats.try_get::<i64, _>("under_review").unwrap_or(0) as u64,
+        average_score: stats.try_get::<f64, _>("avg_score").unwrap_or(0.0),
         high_risk_corridors: corridors,
     };
 

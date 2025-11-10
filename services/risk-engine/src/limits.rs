@@ -3,7 +3,7 @@ use crate::models::{DynamicLimit, UpdateLimitRequest};
 use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -162,24 +162,24 @@ impl LimitsManager {
     }
 
     async fn calculate_success_rate(&self, bank_id: Uuid, pool: &PgPool) -> RiskResult<f64> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             "SELECT
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE status = 'Completed') as completed
              FROM transactions
              WHERE sender_bank_id = $1
-             AND created_at > NOW() - INTERVAL '30 days'",
-            bank_id
+             AND created_at > NOW() - INTERVAL '30 days'"
         )
+        .bind(bank_id)
         .fetch_one(pool)
         .await?;
 
-        let total = result.total.unwrap_or(0);
+        let total: i64 = result.try_get("total").unwrap_or(0);
         if total == 0 {
             return Ok(0.9); // Default for new banks
         }
 
-        let completed = result.completed.unwrap_or(0);
+        let completed: i64 = result.try_get("completed").unwrap_or(0);
         Ok(completed as f64 / total as f64)
     }
 
@@ -200,24 +200,24 @@ impl LimitsManager {
     }
 
     async fn calculate_settlement_ratio(&self, bank_id: Uuid, pool: &PgPool) -> RiskResult<f64> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             "SELECT
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE settlement_type = 'Instant') as instant
              FROM transactions
              WHERE sender_bank_id = $1
-             AND created_at > NOW() - INTERVAL '30 days'",
-            bank_id
+             AND created_at > NOW() - INTERVAL '30 days'"
         )
+        .bind(bank_id)
         .fetch_one(pool)
         .await?;
 
-        let total = result.total.unwrap_or(0);
+        let total: i64 = result.try_get("total").unwrap_or(0);
         if total == 0 {
             return Ok(1.0);
         }
 
-        let instant = result.instant.unwrap_or(0);
+        let instant: i64 = result.try_get("instant").unwrap_or(0);
         Ok((instant as f64 / total as f64).max(0.5)) // At least 0.5 factor
     }
 }

@@ -1,33 +1,35 @@
-FROM golang:1.21-alpine AS builder
+# syntax=docker/dockerfile:1
+FROM golang:1.24-alpine AS builder
 
-RUN apk add --no-cache git make ca-certificates tzdata
+ENV GOTOOLCHAIN=auto
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
+
+COPY . .
+
+RUN go mod tidy
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w" -a -installsuffix cgo \
+    -o /app/service ./cmd/server/main.go
+
+FROM alpine:3.21 AS runtime
+
+RUN apk add --no-cache ca-certificates tzdata && \
+    addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser
 
 WORKDIR /app
 
-# Copy go mod files
-COPY go.mod go.sum ./
-RUN go mod download
+COPY --from=builder --chown=appuser:appuser /app/service /app/service
 
-# Copy source code
-COPY . .
+USER appuser
 
-# Build binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o reporting-engine cmd/server/main.go
+EXPOSE 8080
 
-# Final stage
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates tzdata
-
-WORKDIR /root/
-
-# Copy binary from builder
-COPY --from=builder /app/reporting-engine .
-COPY --from=builder /app/config.yaml .
-
-# Create temp directory for reports
-RUN mkdir -p /tmp/reports
-
-EXPOSE 8087 9097
-
-CMD ["./reporting-engine"]
+ENTRYPOINT ["/app/service"]

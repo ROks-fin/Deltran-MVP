@@ -1,26 +1,35 @@
-FROM golang:1.21-alpine AS builder
+# syntax=docker/dockerfile:1
+FROM golang:1.24-alpine AS builder
 
-RUN apk add --no-cache git make ca-certificates
+ENV GOTOOLCHAIN=auto
 
-WORKDIR /app
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /build
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download && go mod verify
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o notification-engine cmd/server/main.go
+RUN go mod tidy
 
-FROM alpine:latest
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w" -a -installsuffix cgo \
+    -o /app/service ./cmd/server/main.go
 
-RUN apk --no-cache add ca-certificates tzdata
+FROM alpine:3.21 AS runtime
 
-WORKDIR /root/
+RUN apk add --no-cache ca-certificates tzdata && \
+    addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser
 
-COPY --from=builder /app/notification-engine .
-COPY --from=builder /app/config.yaml .
-COPY --from=builder /app/templates ./templates
+WORKDIR /app
 
-EXPOSE 8085 8086
+COPY --from=builder --chown=appuser:appuser /app/service /app/service
 
-CMD ["./notification-engine"]
+USER appuser
+
+EXPOSE 8080
+
+ENTRYPOINT ["/app/service"]

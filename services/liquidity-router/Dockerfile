@@ -1,30 +1,25 @@
-# Build stage
-FROM rust:1.75 AS builder
-
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 WORKDIR /app
 
-COPY Cargo.toml ./
-COPY src ./src
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
 
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY . .
 RUN cargo build --release
 
-# Runtime stage
-FROM debian:bookworm-slim
-
+FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y \
-    libssl3 \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/* && \
+    groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
-
 COPY --from=builder /app/target/release/liquidity-router /app/liquidity-router
-
-RUN useradd -m -u 1001 -s /bin/bash deltran && \
-    chown -R deltran:deltran /app
-
-USER deltran
-
-EXPOSE 8083
-
-CMD ["./liquidity-router"]
+USER appuser
+EXPOSE 8080
+CMD ["/app/liquidity-router"]

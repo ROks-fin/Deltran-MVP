@@ -1,5 +1,6 @@
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use chrono::Utc;
+use prometheus::{Encoder, TextEncoder};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 use tracing_subscriber;
@@ -55,6 +56,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .route("/health", web::get().to(health_check))
+            .route("/metrics", web::get().to(prometheus_metrics))
             .route("/api/v1/clearing/windows", web::get().to(get_windows))
             .route("/api/v1/clearing/windows/current", web::get().to(get_current_window))
             .route("/api/v1/clearing/metrics", web::get().to(get_metrics))
@@ -99,4 +101,34 @@ async fn get_metrics() -> impl Responder {
         active_windows: 0,
         netting_efficiency: 0.0,
     })
+}
+
+async fn prometheus_metrics() -> impl Responder {
+    let encoder = TextEncoder::new();
+    let metric_families = prometheus::gather();
+    let mut buffer = vec![];
+
+    match encoder.encode(&metric_families, &mut buffer) {
+        Ok(_) => {
+            match String::from_utf8(buffer) {
+                Ok(mut body) => {
+                    // If no metrics are registered, return a minimal valid Prometheus format
+                    if body.is_empty() {
+                        body = format!(
+                            "# HELP clearing_engine_up Service is running\n\
+                             # TYPE clearing_engine_up gauge\n\
+                             clearing_engine_up 1\n"
+                        );
+                    }
+                    HttpResponse::Ok()
+                        .content_type("text/plain; version=0.0.4")
+                        .body(body)
+                },
+                Err(e) => HttpResponse::InternalServerError()
+                    .body(format!("Failed to encode metrics: {}", e))
+            }
+        },
+        Err(e) => HttpResponse::InternalServerError()
+            .body(format!("Failed to gather metrics: {}", e))
+    }
 }

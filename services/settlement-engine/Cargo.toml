@@ -48,6 +48,7 @@ dotenv = "0.15"
 
 # Metrics
 prometheus = "0.13"
+lazy_static = "1.4"
 
 # Random for mock
 rand = "0.8"
@@ -64,3 +65,12 @@ path = "src/main.rs"
 
 [dev-dependencies]
 tokio-test = "0.4"
+
+# Security - JWT authentication
+jsonwebtoken = "9.2"
+
+# Rate limiting
+governor = "0.6"
+
+# Additional utilities
+futures-util = "0.3"

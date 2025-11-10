@@ -1,6 +1,6 @@
 module github.com/deltran/reporting-engine
 
-go 1.21
+go 1.23.0
 
 require (
 	github.com/aws/aws-sdk-go v1.48.0

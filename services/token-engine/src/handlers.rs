@@ -4,6 +4,7 @@ use crate::models::{
     TransferTokenRequest,
 };
 use crate::services::TokenService;
+use crate::metrics;
 use actix_web::{web, HttpResponse};
 use serde_json::json;
 use std::sync::Arc;
@@ -89,6 +90,20 @@ pub struct BalanceQuery {
     currency: Option<String>,
 }
 
+/// Prometheus metrics endpoint
+pub async fn metrics_endpoint() -> HttpResponse {
+    match metrics::metrics_handler() {
+        Ok(body) => HttpResponse::Ok()
+            .content_type("text/plain; version=0.0.4")
+            .body(body),
+        Err(e) => HttpResponse::InternalServerError()
+            .json(json!({
+                "error": "Failed to gather metrics",
+                "details": e.to_string()
+            }))
+    }
+}
+
 /// Configure routes
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -100,5 +115,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
             .route("/convert", web::post().to(convert_tokens))
             .route("/balance/{bank_id}", web::get().to(get_balance))
             .route("/balances/{bank_id}", web::get().to(get_all_balances)),
-    );
+    )
+    .route("/metrics", web::get().to(metrics_endpoint))
+    .route("/health", web::get().to(health_check));
 }

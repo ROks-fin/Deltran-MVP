@@ -2,6 +2,7 @@ use crate::errors::ObligationEngineError;
 use crate::models::{CreateInstantObligationRequest, SettleObligationsRequest};
 use crate::services::ObligationService;
 use actix_web::{web, HttpResponse};
+use prometheus::{Encoder, TextEncoder};
 use serde_json::json;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -13,6 +14,33 @@ pub async fn health_check() -> HttpResponse {
         "service": "obligation-engine",
         "version": "1.0.0"
     }))
+}
+
+/// Prometheus metrics endpoint
+pub async fn metrics_endpoint() -> HttpResponse {
+    let encoder = TextEncoder::new();
+    let metric_families = prometheus::gather();
+    let mut buffer = vec![];
+
+    match encoder.encode(&metric_families, &mut buffer) {
+        Ok(_) => {
+            match String::from_utf8(buffer) {
+                Ok(body) => HttpResponse::Ok()
+                    .content_type("text/plain; version=0.0.4")
+                    .body(body),
+                Err(e) => HttpResponse::InternalServerError()
+                    .json(json!({
+                        "error": "Failed to encode metrics",
+                        "details": e.to_string()
+                    }))
+            }
+        },
+        Err(e) => HttpResponse::InternalServerError()
+            .json(json!({
+                "error": "Failed to gather metrics",
+                "details": e.to_string()
+            }))
+    }
 }
 
 /// Create instant obligation
@@ -82,14 +110,18 @@ pub async fn get_current_window(
 
 /// Configure routes
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/api/v1/obligations")
-            .route("/health", web::get().to(health_check))
-            .route("/create", web::post().to(create_instant_obligation))
-            .route("/{id}", web::get().to(get_obligation))
-            .route("/window/{clearing_window}", web::get().to(get_obligations_by_window))
-            .route("/netting/{clearing_window}", web::post().to(calculate_netting))
-            .route("/settle", web::post().to(settle_obligations))
-            .route("/current-window", web::get().to(get_current_window)),
-    );
+    cfg
+        // Root-level health endpoint for monitoring
+        .route("/health", web::get().to(health_check))
+        .route("/metrics", web::get().to(metrics_endpoint))
+        .service(
+            web::scope("/api/v1/obligations")
+                .route("/health", web::get().to(health_check))
+                .route("/create", web::post().to(create_instant_obligation))
+                .route("/{id}", web::get().to(get_obligation))
+                .route("/window/{clearing_window}", web::get().to(get_obligations_by_window))
+                .route("/netting/{clearing_window}", web::post().to(calculate_netting))
+                .route("/settle", web::post().to(settle_obligations))
+                .route("/current-window", web::get().to(get_current_window)),
+        );
 }

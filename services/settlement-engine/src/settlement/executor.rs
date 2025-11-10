@@ -6,7 +6,7 @@ use crate::settlement::validator::SettlementValidator;
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{error, info};
@@ -127,26 +127,26 @@ impl SettlementExecutor {
         request: &SettlementRequest,
         settlement_id: Uuid,
     ) -> Result<Uuid> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO settlement_transactions (
                 id, obligation_id, from_bank, to_bank,
                 amount, currency, status, priority,
                 settlement_date, metadata, created_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            "#,
-            settlement_id,
-            request.obligation_id,
-            request.from_bank,
-            request.to_bank,
-            request.amount,
-            request.currency,
-            SettlementStatus::Pending.to_string(),
-            serde_json::to_string(&request.priority)?,
-            request.settlement_date.date_naive(),
-            request.metadata,
-            Utc::now()
+            "#
         )
+        .bind(settlement_id)
+        .bind(request.obligation_id)
+        .bind(&request.from_bank)
+        .bind(&request.to_bank)
+        .bind(request.amount)
+        .bind(&request.currency)
+        .bind(SettlementStatus::Pending.to_string())
+        .bind(serde_json::to_string(&request.priority)?)
+        .bind(request.settlement_date.date_naive())
+        .bind(&request.metadata)
+        .bind(Utc::now())
         .execute(&*self.db_pool)
         .await?;
 
@@ -238,58 +238,62 @@ impl SettlementExecutor {
         let expires_at = Utc::now() + Duration::seconds(self.config.settlement.fund_lock_expiry_seconds as i64);
 
         // Get nostro account
-        let account = sqlx::query!(
+        let account = sqlx::query(
             r#"
             SELECT id, ledger_balance, available_balance
             FROM nostro_accounts
             WHERE bank = $1 AND currency = $2 AND is_active = true
-            "#,
-            bank,
-            currency
+            "#
         )
+        .bind(bank)
+        .bind(currency)
         .fetch_optional(&*self.db_pool)
         .await?
         .ok_or_else(|| SettlementError::AccountNotFound(format!("{}:{}", bank, currency)))?;
 
+        let account_id: Uuid = account.try_get("id")?;
+        let ledger_balance: Decimal = account.try_get("ledger_balance")?;
+        let available_balance: Decimal = account.try_get("available_balance")?;
+
         // Check sufficient balance
-        if account.available_balance < *amount {
+        if available_balance < *amount {
             return Err(SettlementError::InsufficientFunds {
                 required: *amount,
-                available: account.available_balance,
+                available: available_balance,
             });
         }
 
         // Create fund lock
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO fund_locks (
                 id, nostro_account_id, settlement_id, amount, currency,
                 bank, status, locked_at, expires_at
             ) VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, $8)
-            "#,
-            lock_id,
-            account.id,
-            settlement_id,
-            amount,
-            currency,
-            bank,
-            Utc::now(),
-            expires_at
+            "#
         )
+        .bind(lock_id)
+        .bind(account_id)
+        .bind(settlement_id)
+        .bind(amount)
+        .bind(currency)
+        .bind(bank)
+        .bind(Utc::now())
+        .bind(expires_at)
         .execute(&*self.db_pool)
         .await?;
 
         // Update available balance (locked amount reduces available)
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE nostro_accounts
             SET available_balance = available_balance - $1,
                 locked_balance = locked_balance + $1
             WHERE id = $2
-            "#,
-            amount,
-            account.id
+            "#
         )
+        .bind(amount)
+        .bind(account_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -318,17 +322,17 @@ impl SettlementExecutor {
         let transfer_result = bank_client.initiate_transfer(&transfer_request).await?;
 
         // Store external reference
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE settlement_transactions
             SET external_reference = $1,
                 executed_at = $2
             WHERE id = $3
-            "#,
-            transfer_result.external_reference,
-            Utc::now(),
-            settlement_id
+            "#
         )
+        .bind(&transfer_result.external_reference)
+        .bind(Utc::now())
+        .bind(settlement_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -357,14 +361,14 @@ impl SettlementExecutor {
 
             // For MVP, we'll check the settlement_transactions table
             // In production, this would poll the external bank API
-            let status = sqlx::query!(
+            let status = sqlx::query(
                 r#"
                 SELECT status, bank_confirmation
                 FROM settlement_transactions
                 WHERE id = $1
-                "#,
-                settlement_id
+                "#
             )
+            .bind(settlement_id)
             .fetch_one(&*self.db_pool)
             .await?;
 
@@ -386,19 +390,19 @@ impl SettlementExecutor {
         let completed_at = Utc::now();
 
         // Update settlement to completed
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE settlement_transactions
             SET status = $1,
                 bank_confirmation = $2,
                 completed_at = $3
             WHERE id = $4
-            "#,
-            SettlementStatus::Completed.to_string(),
-            confirmation,
-            completed_at,
-            settlement_id
+            "#
         )
+        .bind(SettlementStatus::Completed.to_string())
+        .bind(confirmation)
+        .bind(completed_at)
+        .bind(settlement_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -417,47 +421,51 @@ impl SettlementExecutor {
 
     async fn release_and_apply_lock(&self, lock_id: Uuid) -> Result<()> {
         // Get lock details
-        let lock = sqlx::query!(
+        let lock = sqlx::query(
             r#"
             SELECT nostro_account_id, amount, currency
             FROM fund_locks
             WHERE id = $1 AND status = 'active'
-            "#,
-            lock_id
+            "#
         )
+        .bind(lock_id)
         .fetch_optional(&*self.db_pool)
         .await?
         .ok_or_else(|| SettlementError::LockNotFound(lock_id.to_string()))?;
+
+        let nostro_account_id: Uuid = lock.try_get("nostro_account_id")?;
+        let amount: Decimal = lock.try_get("amount")?;
+        let currency: String = lock.try_get("currency")?;
 
         // Start transaction
         let mut tx = self.db_pool.begin().await?;
 
         // Update lock status to settled
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE fund_locks
             SET status = 'settled',
                 released_at = $1,
                 released_by = 'settlement_complete'
             WHERE id = $2
-            "#,
-            Utc::now(),
-            lock_id
+            "#
         )
+        .bind(Utc::now())
+        .bind(lock_id)
         .execute(&mut *tx)
         .await?;
 
         // Deduct from ledger balance and unlock from locked balance
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE nostro_accounts
             SET ledger_balance = ledger_balance - $1,
                 locked_balance = locked_balance - $1
             WHERE id = $2
-            "#,
-            lock.amount,
-            lock.nostro_account_id
+            "#
         )
+        .bind(amount)
+        .bind(nostro_account_id)
         .execute(&mut *tx)
         .await?;
 
@@ -474,17 +482,17 @@ impl SettlementExecutor {
         status: SettlementStatus,
         error_message: Option<String>,
     ) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE settlement_transactions
             SET status = $1,
                 error_message = $2
             WHERE id = $3
-            "#,
-            status.to_string(),
-            error_message,
-            settlement_id
+            "#
         )
+        .bind(status.to_string())
+        .bind(error_message)
+        .bind(settlement_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -492,27 +500,33 @@ impl SettlementExecutor {
     }
 
     pub async fn get_settlement_status(&self, settlement_id: Uuid) -> Result<SettlementResult> {
-        let settlement = sqlx::query!(
+        let settlement = sqlx::query(
             r#"
             SELECT id, status, external_reference, bank_confirmation,
                    completed_at, error_message
             FROM settlement_transactions
             WHERE id = $1
-            "#,
-            settlement_id
+            "#
         )
+        .bind(settlement_id)
         .fetch_optional(&*self.db_pool)
         .await?
         .ok_or_else(|| SettlementError::Internal(format!("Settlement {} not found", settlement_id)))?;
 
+        let status_str: String = settlement.try_get("status")?;
+        let external_reference: Option<String> = settlement.try_get("external_reference").ok();
+        let bank_confirmation: Option<String> = settlement.try_get("bank_confirmation").ok();
+        let completed_at: Option<DateTime<Utc>> = settlement.try_get("completed_at").ok();
+        let error_message: Option<String> = settlement.try_get("error_message").ok();
+
         Ok(SettlementResult {
             settlement_id,
-            status: SettlementStatus::from_str(&settlement.status)
+            status: SettlementStatus::from_str(&status_str)
                 .unwrap_or(SettlementStatus::Pending),
-            external_reference: settlement.external_reference,
-            bank_confirmation: settlement.bank_confirmation,
-            completed_at: settlement.completed_at,
-            error_message: settlement.error_message,
+            external_reference,
+            bank_confirmation,
+            completed_at,
+            error_message,
         })
     }
 }

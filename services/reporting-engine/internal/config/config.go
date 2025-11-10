@@ -2,10 +2,9 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
@@ -76,22 +75,26 @@ type MonitoringConfig struct {
 }
 
 func Load(configPath string) (*Config, error) {
-	if configPath == "" {
-		configPath = "config.yaml"
-	}
+	// Set defaults first
+	setDefaults()
 
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+	viper.AutomaticEnv()
+
+	// Try to load config file if provided, but don't fail if it doesn't exist
+	if configPath != "" {
+		viper.SetConfigFile(configPath)
+		viper.SetConfigType("yaml")
+
+		if err := viper.ReadInConfig(); err != nil {
+			// Config file not required - just use defaults and env vars
+			fmt.Printf("Config file not found, using defaults and environment variables: %v\n", err)
+		}
 	}
 
 	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
+	if err := viper.Unmarshal(&config); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-
-	// Override with environment variables
-	config.applyEnvOverrides()
 
 	// Validate configuration
 	if err := config.Validate(); err != nil {
@@ -101,42 +104,54 @@ func Load(configPath string) (*Config, error) {
 	return &config, nil
 }
 
-func (c *Config) applyEnvOverrides() {
-	if port := os.Getenv("SERVICE_PORT"); port != "" {
-		c.Server.Port = port
-	}
+func setDefaults() {
+	// Server defaults
+	viper.SetDefault("server.port", "8088")
+	viper.SetDefault("server.read_timeout", "30s")
+	viper.SetDefault("server.write_timeout", "30s")
+	viper.SetDefault("server.max_request_size", 104857600) // 100MB
 
-	if dbHost := os.Getenv("DB_HOST"); dbHost != "" {
-		c.Database.Host = dbHost
-	}
+	// Database defaults with Docker service names
+	viper.SetDefault("database.host", "postgres")
+	viper.SetDefault("database.port", 5432)
+	viper.SetDefault("database.name", "deltran")
+	viper.SetDefault("database.user", "deltran")
+	viper.SetDefault("database.password", "deltran_secure_pass_2024")
+	viper.SetDefault("database.max_connections", 20)
+	viper.SetDefault("database.ssl_mode", "disable")
 
-	if dbPassword := os.Getenv("DB_PASSWORD"); dbPassword != "" {
-		c.Database.Password = dbPassword
-	}
+	// Redis defaults with Docker service names
+	viper.SetDefault("redis.address", "redis:6379")
+	viper.SetDefault("redis.password", "")
+	viper.SetDefault("redis.db", 3)
+	viper.SetDefault("redis.cache_ttl", "5m")
 
-	if redisAddr := os.Getenv("REDIS_ADDRESS"); redisAddr != "" {
-		c.Redis.Address = redisAddr
-	}
+	// S3/MinIO defaults with Docker service names
+	viper.SetDefault("s3.endpoint", "http://minio:9000")
+	viper.SetDefault("s3.bucket", "deltran-reports")
+	viper.SetDefault("s3.access_key", "minioadmin")
+	viper.SetDefault("s3.secret_key", "minioadmin")
+	viper.SetDefault("s3.region", "us-east-1")
+	viper.SetDefault("s3.use_ssl", false)
 
-	if redisPassword := os.Getenv("REDIS_PASSWORD"); redisPassword != "" {
-		c.Redis.Password = redisPassword
-	}
+	// NATS defaults with Docker service names
+	viper.SetDefault("nats.url", "nats://nats:4222")
+	viper.SetDefault("nats.subject", "reports.requests")
 
-	if s3Endpoint := os.Getenv("S3_ENDPOINT"); s3Endpoint != "" {
-		c.S3.Endpoint = s3Endpoint
-	}
+	// Scheduler defaults
+	viper.SetDefault("scheduler.enabled", true)
+	viper.SetDefault("scheduler.timezone", "UTC")
+	viper.SetDefault("scheduler.max_concurrent", 5)
 
-	if s3AccessKey := os.Getenv("AWS_ACCESS_KEY_ID"); s3AccessKey != "" {
-		c.S3.AccessKey = s3AccessKey
-	}
+	// Reports defaults
+	viper.SetDefault("reports.max_rows_excel", 1048576)
+	viper.SetDefault("reports.max_rows_csv", 10000000)
+	viper.SetDefault("reports.timeout", "5m")
+	viper.SetDefault("reports.temp_dir", "/tmp/reports")
 
-	if s3SecretKey := os.Getenv("AWS_SECRET_ACCESS_KEY"); s3SecretKey != "" {
-		c.S3.SecretKey = s3SecretKey
-	}
-
-	if natsURL := os.Getenv("NATS_URL"); natsURL != "" {
-		c.NATS.URL = natsURL
-	}
+	// Monitoring defaults
+	viper.SetDefault("monitoring.prometheus_enabled", true)
+	viper.SetDefault("monitoring.metrics_port", "9097")
 }
 
 func (c *Config) Validate() error {
@@ -176,56 +191,3 @@ func (c *Config) DatabaseDSN() string {
 	)
 }
 
-// Default configuration for development
-func Default() *Config {
-	return &Config{
-		Server: ServerConfig{
-			Port:           "8087",
-			ReadTimeout:    30 * time.Second,
-			WriteTimeout:   30 * time.Second,
-			MaxRequestSize: 100 * 1024 * 1024, // 100MB
-		},
-		Database: DatabaseConfig{
-			Host:           "localhost",
-			Port:           5432,
-			Name:           "deltran",
-			User:           "deltran",
-			Password:       "deltran",
-			MaxConnections: 20,
-			SSLMode:        "disable",
-		},
-		Redis: RedisConfig{
-			Address:  "localhost:6379",
-			Password: "",
-			DB:       3,
-			CacheTTL: 5 * time.Minute,
-		},
-		S3: S3Config{
-			Endpoint:  "http://localhost:9000",
-			Bucket:    "deltran-reports",
-			AccessKey: "minioadmin",
-			SecretKey: "minioadmin",
-			Region:    "us-east-1",
-			UseSSL:    false,
-		},
-		NATS: NATSConfig{
-			URL:     "nats://localhost:4222",
-			Subject: "reports.requests",
-		},
-		Scheduler: SchedulerConfig{
-			Enabled:       true,
-			Timezone:      "UTC",
-			MaxConcurrent: 5,
-		},
-		Reports: ReportsConfig{
-			MaxRowsExcel: 1048576,
-			MaxRowsCSV:   10000000,
-			Timeout:      5 * time.Minute,
-			TempDir:      "/tmp/reports",
-		},
-		Monitoring: MonitoringConfig{
-			PrometheusEnabled: true,
-			MetricsPort:       "9097",
-		},
-	}
-}

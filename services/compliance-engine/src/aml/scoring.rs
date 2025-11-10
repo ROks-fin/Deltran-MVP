@@ -183,25 +183,26 @@ impl AmlScorer {
         let mut risk_score = 0.0;
 
         // ===== Rapid Movement Pattern =====
-        let rapid_movement = sqlx::query!(
-            "SELECT COUNT(*) as count FROM transactions
+        let rapid_movement = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM transactions
              WHERE sender_bank_id = $1
              AND created_at > NOW() - INTERVAL '1 hour'
-             AND status = 'Completed'",
-            bank_id
-        ).fetch_one(db).await?;
+             AND status = 'Completed'"
+        )
+        .bind(bank_id)
+        .fetch_one(db)
+        .await
+        .unwrap_or(0);
 
-        if let Some(count) = rapid_movement.count {
-            if count > 10 {
-                patterns.push(SuspiciousPattern {
-                    pattern_id: "RAPID_01".to_string(),
-                    pattern_name: "Rapid Movement".to_string(),
-                    confidence: 0.85,
-                    description: "Multiple transactions in short time".to_string(),
-                    transactions_involved: vec![],
-                });
-                risk_score += 40.0;
-            }
+        if rapid_movement > 10 {
+            patterns.push(SuspiciousPattern {
+                pattern_id: "RAPID_01".to_string(),
+                pattern_name: "Rapid Movement".to_string(),
+                confidence: 0.85,
+                description: "Multiple transactions in short time".to_string(),
+                transactions_involved: vec![],
+            });
+            risk_score += 40.0;
         }
 
         // ===== Structuring Pattern =====
@@ -230,8 +231,8 @@ impl AmlScorer {
         }
 
         // ===== Round-trip Pattern =====
-        let round_trip = sqlx::query!(
-            "SELECT COUNT(*) as count FROM transactions t1
+        let round_trip = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM transactions t1
              WHERE EXISTS (
                  SELECT 1 FROM transactions t2
                  WHERE t2.sender_bank_id = t1.receiver_bank_id
@@ -240,21 +241,22 @@ impl AmlScorer {
                  AND t2.created_at < t1.created_at + INTERVAL '48 hours'
              )
              AND t1.sender_bank_id = $1
-             AND t1.created_at > NOW() - INTERVAL '7 days'",
-            bank_id
-        ).fetch_one(db).await?;
+             AND t1.created_at > NOW() - INTERVAL '7 days'"
+        )
+        .bind(bank_id)
+        .fetch_one(db)
+        .await
+        .unwrap_or(0);
 
-        if let Some(count) = round_trip.count {
-            if count > 0 {
-                patterns.push(SuspiciousPattern {
-                    pattern_id: "ROUND_01".to_string(),
-                    pattern_name: "Round-trip Transaction".to_string(),
-                    confidence: 0.90,
-                    description: "Funds returned to origin".to_string(),
-                    transactions_involved: vec![],
-                });
-                risk_score += 60.0;
-            }
+        if round_trip > 0 {
+            patterns.push(SuspiciousPattern {
+                pattern_id: "ROUND_01".to_string(),
+                pattern_name: "Round-trip Transaction".to_string(),
+                confidence: 0.90,
+                description: "Funds returned to origin".to_string(),
+                transactions_involved: vec![],
+            });
+            risk_score += 60.0;
         }
 
         Ok(PatternDetectionResult {

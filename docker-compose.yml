@@ -108,8 +108,8 @@ services:
       context: ./services/gateway
       dockerfile: Dockerfile
     container_name: deltran-gateway
-    expose:
-      - "8080"
+    ports:
+      - "8080:8080"
     environment:
       - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
       - REDIS_URL=redis://redis:6379
@@ -263,6 +263,7 @@ services:
       - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
+      - HTTP_PORT=8087
       - SERVICE_PORT=8087
     depends_on:
       - postgres

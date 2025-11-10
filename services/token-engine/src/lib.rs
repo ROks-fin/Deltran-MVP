@@ -5,6 +5,7 @@ pub mod handlers;
 pub mod services;
 pub mod database;
 pub mod nats;
+pub mod metrics;
 
 pub use config::Config;
 pub use errors::{TokenEngineError, Result};

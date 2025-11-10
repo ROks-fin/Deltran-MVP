@@ -2,7 +2,7 @@ use crate::error::{Result, SettlementError};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
@@ -37,21 +37,21 @@ impl VostroAccountManager {
     ) -> Result<VostroAccount> {
         let account_id = Uuid::new_v4();
 
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO vostro_accounts (
                 id, bank, account_number, currency,
                 ledger_balance, credit_limit, is_active, created_at
             ) VALUES ($1, $2, $3, $4, $5, $6, true, $7)
-            "#,
-            account_id,
-            bank,
-            account_number,
-            currency,
-            Decimal::ZERO,
-            credit_limit,
-            Utc::now()
+            "#
         )
+        .bind(account_id)
+        .bind(bank)
+        .bind(account_number)
+        .bind(currency)
+        .bind(Decimal::ZERO)
+        .bind(credit_limit)
+        .bind(Utc::now())
         .execute(&*self.db_pool)
         .await?;
 
@@ -64,24 +64,32 @@ impl VostroAccountManager {
     }
 
     pub async fn get_account(&self, account_id: &Uuid) -> Result<VostroAccount> {
-        let account = sqlx::query_as!(
-            VostroAccount,
+        let row = sqlx::query(
             r#"
             SELECT
                 id, bank, account_number, currency,
                 ledger_balance, credit_limit, is_active, created_at
             FROM vostro_accounts
             WHERE id = $1
-            "#,
-            account_id
+            "#
         )
+        .bind(account_id)
         .fetch_optional(&*self.db_pool)
         .await?
         .ok_or_else(|| {
             SettlementError::AccountNotFound(format!("Vostro account {}", account_id))
         })?;
 
-        Ok(account)
+        Ok(VostroAccount {
+            id: row.try_get("id")?,
+            bank: row.try_get("bank")?,
+            account_number: row.try_get("account_number")?,
+            currency: row.try_get("currency")?,
+            ledger_balance: row.try_get("ledger_balance")?,
+            credit_limit: row.try_get("credit_limit").ok(),
+            is_active: row.try_get("is_active").ok(),
+            created_at: row.try_get("created_at")?,
+        })
     }
 
     pub async fn get_account_by_bank_currency(
@@ -89,31 +97,38 @@ impl VostroAccountManager {
         bank: &str,
         currency: &str,
     ) -> Result<VostroAccount> {
-        let account = sqlx::query_as!(
-            VostroAccount,
+        let row = sqlx::query(
             r#"
             SELECT
                 id, bank, account_number, currency,
                 ledger_balance, credit_limit, is_active, created_at
             FROM vostro_accounts
             WHERE bank = $1 AND currency = $2
-            "#,
-            bank,
-            currency
+            "#
         )
+        .bind(bank)
+        .bind(currency)
         .fetch_optional(&*self.db_pool)
         .await?
         .ok_or_else(|| {
             SettlementError::AccountNotFound(format!("Vostro account {}:{}", bank, currency))
         })?;
 
-        Ok(account)
+        Ok(VostroAccount {
+            id: row.try_get("id")?,
+            bank: row.try_get("bank")?,
+            account_number: row.try_get("account_number")?,
+            currency: row.try_get("currency")?,
+            ledger_balance: row.try_get("ledger_balance")?,
+            credit_limit: row.try_get("credit_limit").ok(),
+            is_active: row.try_get("is_active").ok(),
+            created_at: row.try_get("created_at")?,
+        })
     }
 
     pub async fn list_accounts(&self, bank: Option<&str>) -> Result<Vec<VostroAccount>> {
-        let accounts = if let Some(bank_code) = bank {
-            sqlx::query_as!(
-                VostroAccount,
+        let rows = if let Some(bank_code) = bank {
+            sqlx::query(
                 r#"
                 SELECT
                     id, bank, account_number, currency,
@@ -121,14 +136,13 @@ impl VostroAccountManager {
                 FROM vostro_accounts
                 WHERE bank = $1
                 ORDER BY bank, currency
-                "#,
-                bank_code
+                "#
             )
+            .bind(bank_code)
             .fetch_all(&*self.db_pool)
             .await?
         } else {
-            sqlx::query_as!(
-                VostroAccount,
+            sqlx::query(
                 r#"
                 SELECT
                     id, bank, account_number, currency,
@@ -141,6 +155,19 @@ impl VostroAccountManager {
             .await?
         };
 
+        let accounts = rows.iter().map(|row| {
+            Ok(VostroAccount {
+                id: row.try_get("id")?,
+                bank: row.try_get("bank")?,
+                account_number: row.try_get("account_number")?,
+                currency: row.try_get("currency")?,
+                ledger_balance: row.try_get("ledger_balance")?,
+                credit_limit: row.try_get("credit_limit").ok(),
+                is_active: row.try_get("is_active").ok(),
+                created_at: row.try_get("created_at")?,
+            })
+        }).collect::<Result<Vec<VostroAccount>>>()?;
+
         Ok(accounts)
     }
 
@@ -149,15 +176,15 @@ impl VostroAccountManager {
         account_id: &Uuid,
         amount: Decimal,
     ) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE vostro_accounts
             SET ledger_balance = ledger_balance + $1
             WHERE id = $2
-            "#,
-            amount,
-            account_id
+            "#
         )
+        .bind(amount)
+        .bind(account_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -185,15 +212,15 @@ impl VostroAccountManager {
             }
         }
 
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE vostro_accounts
             SET ledger_balance = ledger_balance - $1
             WHERE id = $2
-            "#,
-            amount,
-            account_id
+            "#
         )
+        .bind(amount)
+        .bind(account_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -203,14 +230,14 @@ impl VostroAccountManager {
     }
 
     pub async fn deactivate_account(&self, account_id: &Uuid) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE vostro_accounts
             SET is_active = false
             WHERE id = $1
-            "#,
-            account_id
+            "#
         )
+        .bind(account_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -220,14 +247,14 @@ impl VostroAccountManager {
     }
 
     pub async fn activate_account(&self, account_id: &Uuid) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE vostro_accounts
             SET is_active = true
             WHERE id = $1
-            "#,
-            account_id
+            "#
         )
+        .bind(account_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -241,15 +268,15 @@ impl VostroAccountManager {
         account_id: &Uuid,
         new_limit: Option<Decimal>,
     ) -> Result<()> {
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE vostro_accounts
             SET credit_limit = $1
             WHERE id = $2
-            "#,
-            new_limit,
-            account_id
+            "#
         )
+        .bind(new_limit)
+        .bind(account_id)
         .execute(&*self.db_pool)
         .await?;
 

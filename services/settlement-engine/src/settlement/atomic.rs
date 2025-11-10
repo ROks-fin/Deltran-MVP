@@ -1,7 +1,8 @@
 use crate::error::{Result, SettlementError};
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -53,16 +54,16 @@ impl AtomicController {
         let now = Utc::now();
 
         // Create database record
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO settlement_atomic_operations (
                 id, settlement_id, operation_type, state, started_at
             ) VALUES ($1, $2, 'settlement', 'InProgress', $3)
-            "#,
-            operation_id,
-            settlement_id,
-            now
+            "#
         )
+        .bind(operation_id)
+        .bind(settlement_id)
+        .bind(now)
         .execute(&*self.db_pool)
         .await?;
 
@@ -125,34 +126,34 @@ impl AtomicOperation {
         // Persist checkpoint to database
         let checkpoint_order = self.checkpoints.read().await.len() as i32;
 
-        sqlx::query!(
+        sqlx::query(
             r#"
             INSERT INTO settlement_operation_checkpoints (
                 operation_id, checkpoint_name, checkpoint_order,
                 checkpoint_data, rollback_data, status
             ) VALUES ($1, $2, $3, $4, $5, 'completed')
-            "#,
-            self.id,
-            checkpoint.name,
-            checkpoint_order,
-            checkpoint.data,
-            rollback_data.unwrap_or(serde_json::json!({}))
+            "#
         )
+        .bind(self.id)
+        .bind(&checkpoint.name)
+        .bind(checkpoint_order)
+        .bind(&checkpoint.data)
+        .bind(rollback_data.unwrap_or(serde_json::json!({})))
         .execute(&*self.db_pool)
         .await?;
 
         // Update current checkpoint in atomic operation
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE settlement_atomic_operations
             SET current_checkpoint = $1,
                 checkpoints = checkpoints || $2::jsonb
             WHERE id = $3
-            "#,
-            checkpoint.name,
-            serde_json::to_value(&checkpoint)?,
-            self.id
+            "#
         )
+        .bind(&checkpoint.name)
+        .bind(serde_json::to_value(&checkpoint)?)
+        .bind(self.id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -178,17 +179,17 @@ impl AtomicOperation {
         drop(state);
 
         // Update database
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE settlement_atomic_operations
             SET state = 'Committed',
                 completed_at = $1,
                 committed_at = $1
             WHERE id = $2
-            "#,
-            Utc::now(),
-            self.id
+            "#
         )
+        .bind(Utc::now())
+        .bind(self.id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -229,7 +230,7 @@ impl AtomicOperation {
         }
 
         // Update database
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE settlement_atomic_operations
             SET state = 'RolledBack',
@@ -237,25 +238,25 @@ impl AtomicOperation {
                 rolled_back_at = $1,
                 rollback_reason = $2
             WHERE id = $3
-            "#,
-            Utc::now(),
-            reason,
-            self.id
+            "#
         )
+        .bind(Utc::now())
+        .bind(reason)
+        .bind(self.id)
         .execute(&*self.db_pool)
         .await?;
 
         // Mark all checkpoints as rolled back
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE settlement_operation_checkpoints
             SET status = 'rolled_back',
                 rolled_back_at = $1
             WHERE operation_id = $2
-            "#,
-            Utc::now(),
-            self.id
+            "#
         )
+        .bind(Utc::now())
+        .bind(self.id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -303,16 +304,16 @@ impl AtomicOperation {
             }
             "settlement_recorded" => {
                 // Update settlement status to rolled back
-                sqlx::query!(
+                sqlx::query(
                     r#"
                     UPDATE settlement_transactions
                     SET status = 'rolled_back',
                         rolled_back_at = $1
                     WHERE id = $2
-                    "#,
-                    Utc::now(),
-                    self.settlement_id
+                    "#
                 )
+                .bind(Utc::now())
+                .bind(self.settlement_id)
                 .execute(&*self.db_pool)
                 .await?;
             }
@@ -326,30 +327,35 @@ impl AtomicOperation {
 
     async fn release_fund_lock(&self, lock_id: Uuid) -> Result<()> {
         // Get lock details before releasing
-        let lock = sqlx::query!(
+        let lock = sqlx::query(
             r#"
             SELECT nostro_account_id, amount, currency, bank
             FROM fund_locks
             WHERE id = $1 AND status = 'active'
-            "#,
-            lock_id
+            "#
         )
+        .bind(lock_id)
         .fetch_optional(&*self.db_pool)
         .await?
         .ok_or_else(|| SettlementError::LockNotFound(lock_id.to_string()))?;
 
+        let nostro_account_id: Uuid = lock.try_get("nostro_account_id")?;
+        let amount: Decimal = lock.try_get("amount")?;
+        let currency: String = lock.try_get("currency")?;
+        let bank: String = lock.try_get("bank")?;
+
         // Update lock status
-        sqlx::query!(
+        sqlx::query(
             r#"
             UPDATE fund_locks
             SET status = 'released',
                 released_at = $1,
                 released_by = 'rollback'
             WHERE id = $2
-            "#,
-            Utc::now(),
-            lock_id
+            "#
         )
+        .bind(Utc::now())
+        .bind(lock_id)
         .execute(&*self.db_pool)
         .await?;
 
@@ -357,7 +363,7 @@ impl AtomicOperation {
 
         info!(
             "Released fund lock {} for {} {} on {}",
-            lock_id, lock.amount, lock.currency, lock.bank
+            lock_id, amount, currency, bank
         );
 
         Ok(())

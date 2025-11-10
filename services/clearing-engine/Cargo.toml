@@ -58,6 +58,15 @@ dotenv = "0.15"
 prometheus = "0.13"
 lazy_static = "1.4"
 
+# Security - JWT authentication
+jsonwebtoken = "9.2"
+
+# Rate limiting
+governor = "0.6"
+
+# Additional utilities
+futures-util = "0.3"
+
 [build-dependencies]
 tonic-build = "0.10"
 

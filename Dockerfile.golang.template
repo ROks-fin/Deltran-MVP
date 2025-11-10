@@ -1,0 +1,133 @@
+# ============================================
+# Эталонный Dockerfile для Go сервисов DelTran MVP
+# ============================================
+# Основано на Docker best practices и Context7 документации
+# Использует multi-stage build для оптимизации размера образа
+#
+# Проблемы которые решает:
+# 1. Автоматическое разрешение версий Go через GOTOOLCHAIN
+# 2. Кеширование зависимостей для быстрой пересборки
+# 3. Минимальный размер финального образа (alpine)
+# 4. Security hardening (non-root user, minimal attack surface)
+# 5. Reproducible builds (pinned versions)
+#
+# Использование:
+#   docker build -t service-name:latest -f Dockerfile .
+# ============================================
+
+# syntax=docker/dockerfile:1
+
+# ============================================
+# Stage 1: Builder - Компиляция Go приложения
+# ============================================
+FROM golang:1.23-alpine AS builder
+
+# Установка необходимых build tools
+RUN apk add --no-cache \
+    git \
+    ca-certificates \
+    tzdata
+
+# Рабочая директория
+WORKDIR /build
+
+# ============================================
+# Оптимизация кеширования зависимостей
+# Копируем только go.mod и go.sum для кеширования слоя с зависимостями
+# ============================================
+COPY go.mod go.sum ./
+
+# Загрузка зависимостей с автоматическим разрешением версий
+# GOTOOLCHAIN=auto позволяет Go автоматически скачать нужную версию компилятора
+# если go.mod требует более новую версию чем установленная
+RUN go env -w GOTOOLCHAIN=auto && \
+    go mod download && \
+    go mod verify
+
+# Копируем весь исходный код
+COPY . .
+
+# ============================================
+# Компиляция бинарника с оптимизациями
+# ============================================
+# CGO_ENABLED=0 - статическая линковка, не требует libc
+# GOOS=linux - таргет платформа
+# GOARCH=amd64 - таргет архитектура
+# -ldflags="-s -w" - убрать debug информацию (уменьшение размера)
+# -a - пересобрать все пакеты
+# -installsuffix cgo - суффикс для static builds
+RUN CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64 \
+    go build \
+    -ldflags="-s -w -X main.version=1.0.0 -X main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -a \
+    -installsuffix cgo \
+    -o /app/service \
+    .
+
+# ============================================
+# Stage 2: Runtime - Минимальный production образ
+# ============================================
+FROM alpine:3.21 AS runtime
+
+# Установка минимальных runtime зависимостей
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    && addgroup -g 1000 appuser \
+    && adduser -D -u 1000 -G appuser appuser
+
+# Рабочая директория
+WORKDIR /app
+
+# Копирование скомпилированного бинарника из builder stage
+COPY --from=builder --chown=appuser:appuser /app/service /app/service
+
+# Копирование timezone data (если нужно)
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+# Переключение на non-root пользователя (security best practice)
+USER appuser
+
+# Health check (опционально, закомментируйте если не нужен)
+# HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+#     CMD ["/app/service", "--health-check"] || exit 1
+
+# Expose порт (документация, не открывает порт)
+EXPOSE 8080
+
+# Entrypoint - запуск приложения
+ENTRYPOINT ["/app/service"]
+
+# ============================================
+# Build аргументы (опционально)
+# ============================================
+# Использование:
+#   docker build --build-arg GO_VERSION=1.23 -t service:latest .
+#
+# ARG GO_VERSION=1.23
+# FROM golang:${GO_VERSION}-alpine AS builder
+# ============================================
+
+# ============================================
+# Примеры команд для сборки:
+# ============================================
+#
+# 1. Обычная сборка:
+#    docker build -t deltran-gateway:latest .
+#
+# 2. Сборка с кешированием в BuildKit:
+#    DOCKER_BUILDKIT=1 docker build -t deltran-gateway:latest .
+#
+# 3. Сборка с выводом progress:
+#    docker build --progress=plain -t deltran-gateway:latest .
+#
+# 4. Multi-platform build:
+#    docker buildx build --platform linux/amd64,linux/arm64 -t deltran-gateway:latest .
+#
+# 5. Сборка с тестами:
+#    docker build --target builder --progress=plain .
+#    (добавьте RUN go test ./... в builder stage)
+#
+# ============================================
