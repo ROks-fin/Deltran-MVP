@@ -91,6 +91,33 @@ pub enum ClearingError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Calculation overflow")]
+    CalculationOverflow,
+
+    #[error("Calculation underflow")]
+    CalculationUnderflow,
+
+    #[error("Division by zero")]
+    DivisionByZero,
+
+    #[error("Node not found in graph")]
+    NodeNotFound,
+
+    #[error("Graph error: {0}")]
+    GraphError(String),
+
+    #[error("Scheduler error: {0}")]
+    SchedulerError(String),
+
+    #[error("Database error: {0}")]
+    DatabaseError(String),
+
+    #[error("Obligation not found: {0}")]
+    ObligationNotFound(Uuid),
+
+    #[error("Invalid currency: {0}")]
+    InvalidCurrency(String),
 }
 
 pub type Result<T> = std::result::Result<T, ClearingError>;

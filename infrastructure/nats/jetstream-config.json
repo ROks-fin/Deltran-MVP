@@ -1,0 +1,223 @@
+{
+  "streams": [
+    {
+      "name": "CLEARING_EVENTS",
+      "description": "Clearing engine events and state changes",
+      "subjects": [
+        "clearing.events.>",
+        "clearing.window.>",
+        "clearing.netting.>"
+      ],
+      "retention": "limits",
+      "max_age": 2592000000000000,
+      "max_msgs": 10000000,
+      "max_bytes": 10737418240,
+      "max_msg_size": 1048576,
+      "storage": "file",
+      "replicas": 3,
+      "discard": "old",
+      "duplicate_window": 120000000000,
+      "allow_rollup_hdrs": true,
+      "deny_delete": false,
+      "deny_purge": false,
+      "consumers": [
+        {
+          "name": "clearing-processor",
+          "durable_name": "clearing-processor",
+          "filter_subject": "clearing.events.completed",
+          "deliver_policy": "all",
+          "ack_policy": "explicit",
+          "ack_wait": 30000000000,
+          "max_deliver": 5,
+          "replay_policy": "instant"
+        },
+        {
+          "name": "window-monitor",
+          "durable_name": "window-monitor",
+          "filter_subject": "clearing.window.>",
+          "deliver_policy": "all",
+          "ack_policy": "explicit",
+          "ack_wait": 60000000000,
+          "max_deliver": 3
+        }
+      ]
+    },
+    {
+      "name": "SETTLEMENT_EVENTS",
+      "description": "Settlement execution and confirmation events",
+      "subjects": [
+        "settlement.events.>",
+        "settlement.instructions.>",
+        "settlement.confirmations.>"
+      ],
+      "retention": "limits",
+      "max_age": 7776000000000000,
+      "max_msgs": 50000000,
+      "max_bytes": 21474836480,
+      "storage": "file",
+      "replicas": 3,
+      "discard": "old",
+      "duplicate_window": 120000000000,
+      "consumers": [
+        {
+          "name": "settlement-executor",
+          "durable_name": "settlement-executor",
+          "filter_subject": "settlement.instructions.>",
+          "deliver_policy": "all",
+          "ack_policy": "explicit",
+          "ack_wait": 300000000000,
+          "max_deliver": 3,
+          "replay_policy": "instant"
+        }
+      ]
+    },
+    {
+      "name": "TRANSACTION_FLOW",
+      "description": "End-to-end transaction lifecycle events",
+      "subjects": [
+        "transaction.>",
+        "obligation.>",
+        "funding.>"
+      ],
+      "retention": "limits",
+      "max_age": 2592000000000000,
+      "max_msgs": 100000000,
+      "max_bytes": 53687091200,
+      "storage": "file",
+      "replicas": 3,
+      "discard": "old",
+      "duplicate_window": 120000000000,
+      "consumers": [
+        {
+          "name": "transaction-orchestrator",
+          "durable_name": "transaction-orchestrator",
+          "filter_subject": "transaction.>",
+          "deliver_policy": "all",
+          "ack_policy": "explicit",
+          "ack_wait": 120000000000,
+          "max_deliver": 5
+        }
+      ]
+    },
+    {
+      "name": "RECONCILIATION_EVENTS",
+      "description": "EMI account reconciliation events",
+      "subjects": [
+        "reconciliation.>",
+        "emi.account.>",
+        "iso20022.camt.>"
+      ],
+      "retention": "limits",
+      "max_age": 7776000000000000,
+      "max_msgs": 10000000,
+      "max_bytes": 10737418240,
+      "storage": "file",
+      "replicas": 3,
+      "discard": "old",
+      "duplicate_window": 120000000000,
+      "consumers": [
+        {
+          "name": "reconciliation-engine",
+          "durable_name": "reconciliation-engine",
+          "filter_subject": "reconciliation.>",
+          "deliver_policy": "all",
+          "ack_policy": "explicit",
+          "ack_wait": 60000000000,
+          "max_deliver": 3
+        },
+        {
+          "name": "camt-processor",
+          "durable_name": "camt-processor",
+          "filter_subject": "iso20022.camt.>",
+          "deliver_policy": "all",
+          "ack_policy": "explicit",
+          "ack_wait": 30000000000,
+          "max_deliver": 5
+        }
+      ]
+    },
+    {
+      "name": "RISK_EVENTS",
+      "description": "Risk assessment and FX events",
+      "subjects": [
+        "risk.>",
+        "fx.rates.>",
+        "limits.>"
+      ],
+      "retention": "limits",
+      "max_age": 604800000000000,
+      "max_msgs": 5000000,
+      "max_bytes": 5368709120,
+      "storage": "file",
+      "replicas": 3,
+      "discard": "old",
+      "consumers": [
+        {
+          "name": "risk-analyzer",
+          "durable_name": "risk-analyzer",
+          "filter_subject": "risk.>",
+          "deliver_policy": "all",
+          "ack_policy": "explicit",
+          "ack_wait": 10000000000,
+          "max_deliver": 2
+        }
+      ]
+    },
+    {
+      "name": "NOTIFICATION_EVENTS",
+      "description": "Customer and system notifications",
+      "subjects": [
+        "notification.>",
+        "alerts.>",
+        "webhooks.>"
+      ],
+      "retention": "limits",
+      "max_age": 604800000000000,
+      "max_msgs": 1000000,
+      "max_bytes": 2147483648,
+      "storage": "file",
+      "replicas": 2,
+      "discard": "old",
+      "consumers": [
+        {
+          "name": "notification-dispatcher",
+          "durable_name": "notification-dispatcher",
+          "filter_subject": "notification.>",
+          "deliver_policy": "all",
+          "ack_policy": "explicit",
+          "ack_wait": 30000000000,
+          "max_deliver": 3
+        }
+      ]
+    }
+  ],
+  "kv_buckets": [
+    {
+      "bucket": "clearing_state",
+      "description": "Current clearing window states",
+      "history": 10,
+      "ttl": 86400000000000,
+      "max_value_size": 1048576,
+      "storage": "file",
+      "replicas": 3
+    },
+    {
+      "bucket": "fx_rates_cache",
+      "description": "Real-time FX rates cache",
+      "history": 100,
+      "ttl": 300000000000,
+      "max_value_size": 10240,
+      "storage": "memory",
+      "replicas": 2
+    },
+    {
+      "bucket": "transaction_dedup",
+      "description": "Transaction deduplication cache",
+      "history": 1,
+      "ttl": 86400000000000,
+      "max_value_size": 1024,
+      "storage": "memory",
+      "replicas": 2
+    }
+  ]
+}

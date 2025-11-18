@@ -76,7 +76,15 @@
       "Bash(then echo \"Language: Node.js/TypeScript\")",
       "Bash(else echo \"Language: Unknown\")",
       "Bash(fi)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(while read dir)",
+      "Bash(do if [ -f \"$dir/Cargo.toml\" ])",
+      "Bash(while read service)",
+      "Bash(do if test -f \"/c/Users/User/Desktop/Deltran MVP/services/$service/Cargo.toml\")",
+      "Bash(then echo \"$service: Rust\")",
+      "Bash(elif test -f \"/c/Users/User/Desktop/Deltran MVP/services/$service/go.mod\")",
+      "Bash(then echo \"$service: Go\")",
+      "Bash(timeout 120 cargo check:*)"
     ],
     "deny": [],
     "ask": []
