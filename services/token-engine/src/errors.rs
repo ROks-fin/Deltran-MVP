@@ -30,6 +30,9 @@ pub enum TokenEngineError {
     #[error("Invalid currency pair: {from} -> {to}")]
     InvalidCurrencyPair { from: String, to: String },
 
+    #[error("Invalid currency: {0}")]
+    InvalidCurrency(String),
+
     #[error("Token already exists: {0}")]
     TokenAlreadyExists(String),
 
@@ -50,6 +53,34 @@ pub enum TokenEngineError {
 
     #[error("Internal server error: {0}")]
     Internal(String),
+}
+
+// Implement From for async_nats errors
+impl<T> From<async_nats::error::Error<T>> for TokenEngineError
+where
+    T: std::fmt::Debug + std::fmt::Display + Clone + PartialEq,
+{
+    fn from(err: async_nats::error::Error<T>) -> Self {
+        TokenEngineError::Nats(format!("NATS error: {:?}", err))
+    }
+}
+
+impl From<async_nats::SubscribeError> for TokenEngineError {
+    fn from(err: async_nats::SubscribeError) -> Self {
+        TokenEngineError::Nats(format!("NATS subscribe error: {}", err))
+    }
+}
+
+impl From<async_nats::PublishError> for TokenEngineError {
+    fn from(err: async_nats::PublishError) -> Self {
+        TokenEngineError::Nats(format!("NATS publish error: {}", err))
+    }
+}
+
+impl From<serde_json::Error> for TokenEngineError {
+    fn from(err: serde_json::Error) -> Self {
+        TokenEngineError::Internal(format!("JSON serialization error: {}", err))
+    }
 }
 
 impl ResponseError for TokenEngineError {
@@ -76,6 +107,7 @@ impl ResponseError for TokenEngineError {
             TokenEngineError::TokenNotFound(_) => StatusCode::NOT_FOUND,
             TokenEngineError::InsufficientBalance { .. } => StatusCode::BAD_REQUEST,
             TokenEngineError::InvalidCurrencyPair { .. } => StatusCode::BAD_REQUEST,
+            TokenEngineError::InvalidCurrency(_) => StatusCode::BAD_REQUEST,
             TokenEngineError::TokenAlreadyExists(_) => StatusCode::CONFLICT,
             TokenEngineError::InvalidTokenStatus(_) => StatusCode::BAD_REQUEST,
             TokenEngineError::BankNotFound(_) => StatusCode::NOT_FOUND,
@@ -98,6 +130,7 @@ impl TokenEngineError {
             TokenEngineError::TokenNotFound(_) => "not_found",
             TokenEngineError::InsufficientBalance { .. } => "insufficient_balance",
             TokenEngineError::InvalidCurrencyPair { .. } => "invalid_currency",
+            TokenEngineError::InvalidCurrency(_) => "invalid_currency",
             TokenEngineError::TokenAlreadyExists(_) => "duplicate_error",
             TokenEngineError::InvalidTokenStatus(_) => "invalid_status",
             TokenEngineError::BankNotFound(_) => "not_found",

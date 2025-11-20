@@ -59,8 +59,8 @@ func (h *Handler) TransferHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate transaction ID
-	transactionID := fmt.Sprintf("TXN-%s", uuid.New().String()[:8])
+	// Generate transaction ID as full UUID
+	transactionID := uuid.New().String()
 
 	// Check for idempotency key
 	if req.IdempotencyKey != "" {

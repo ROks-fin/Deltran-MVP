@@ -1,12 +1,12 @@
 // Window Manager Module - Manages clearing windows with cron scheduling
 
 pub mod scheduler;
-pub mod state_machine;
-pub mod grace_period;
+// pub mod state_machine;  // Not implemented yet
+// pub mod grace_period;    // Not implemented yet
 
 use crate::errors::ClearingError;
 use crate::models::{ClearingWindow, WindowStatus};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::sync::Arc;

@@ -37,7 +37,7 @@ impl WindowScheduler {
 
         // Job 1: Open new windows (00:00, 06:00, 12:00, 18:00 UTC)
         let window_manager = self.window_manager.clone();
-        let open_job = Job::new_async(&self.config.schedule, move |_uuid, _lock| {
+        let open_job = Job::new_async(self.config.schedule.as_str(), move |_uuid, _lock| {
             let wm = window_manager.clone();
             Box::pin(async move {
                 info!("Scheduled window opening triggered");
@@ -125,7 +125,7 @@ impl WindowScheduler {
     }
 
     /// Stop the scheduler
-    pub async fn stop(&self) -> Result<(), ClearingError> {
+    pub async fn stop(&mut self) -> Result<(), ClearingError> {
         self.scheduler
             .shutdown()
             .await
@@ -152,7 +152,7 @@ impl WindowScheduler {
     }
 
     /// Get next execution time for a job
-    pub async fn next_tick(&self, job_id: Uuid) -> Result<Option<chrono::DateTime<chrono::Utc>>, ClearingError> {
+    pub async fn next_tick(&mut self, job_id: Uuid) -> Result<Option<chrono::DateTime<chrono::Utc>>, ClearingError> {
         self.scheduler
             .next_tick_for_job(job_id)
             .await

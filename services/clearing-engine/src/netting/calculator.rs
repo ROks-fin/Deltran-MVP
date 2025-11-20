@@ -5,6 +5,7 @@ use crate::errors::ClearingError;
 use crate::models::NetPosition;
 use chrono::Utc;
 use petgraph::graph::NodeIndex;
+use petgraph::visit::EdgeRef;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
 use uuid::Uuid;

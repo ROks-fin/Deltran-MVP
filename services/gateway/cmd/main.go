@@ -13,6 +13,7 @@ import (
 	"deltran/gateway/internal/handlers"
 	"deltran/gateway/internal/middleware"
 	"deltran/gateway/internal/orchestration"
+	"deltran/gateway/internal/repository"
 
 	"github.com/gorilla/mux"
 )
@@ -23,6 +24,14 @@ func main() {
 	// Load configuration
 	cfg := config.Load()
 	log.Printf("Configuration loaded. Port: %s", cfg.Server.Port)
+
+	// Initialize bank repository
+	log.Println("Initializing bank repository...")
+	bankRepo, err := repository.NewBankRepository(cfg.Database.URL)
+	if err != nil {
+		log.Fatalf("Failed to initialize bank repository: %v", err)
+	}
+	log.Println("Bank repository initialized successfully")
 
 	// Initialize service clients
 	log.Println("Initializing service clients...")
@@ -37,6 +46,7 @@ func main() {
 		serviceClients.ObligationClient,
 		serviceClients.TokenClient,
 		serviceClients.NotificationClient,
+		bankRepo,
 	)
 
 	// Initialize middleware

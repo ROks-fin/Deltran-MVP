@@ -15,7 +15,7 @@ chrono = { version = "0.4", features = ["serde"] }
 rust_decimal = { version = "1.33", features = ["serde-with-str", "db-postgres"] }
 rust_decimal_macros = "1.33"
 redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
-# async-nats = "0.33"
+async-nats = "0.33"
 thiserror = "1.0"
 anyhow = "1.0"
 tracing = "0.1"

@@ -1,0 +1,36 @@
+# Build artifacts
+target/
+**/target/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Tests
+tests/
+**/tests/
+
+# Documentation
+*.md
+docs/
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Dependencies cache
+Cargo.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

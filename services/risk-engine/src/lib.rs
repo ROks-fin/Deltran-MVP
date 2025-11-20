@@ -6,3 +6,4 @@ pub mod handlers;
 pub mod limits;
 pub mod models;
 pub mod scoring;
+pub mod nats_consumer;

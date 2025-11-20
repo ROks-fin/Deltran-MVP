@@ -9,10 +9,16 @@ import (
 // Config holds all configuration for the gateway
 type Config struct {
 	Server    ServerConfig
+	Database  DatabaseConfig
 	Services  ServiceEndpoints
 	Auth      AuthConfig
 	RateLimit RateLimitConfig
 	CircuitBreaker CircuitBreakerConfig
+}
+
+// DatabaseConfig holds database configuration
+type DatabaseConfig struct {
+	URL string
 }
 
 // ServerConfig holds server configuration
@@ -67,6 +73,9 @@ func Load() *Config {
 			WriteTimeout:    getDurationEnv("GATEWAY_WRITE_TIMEOUT", 15*time.Second),
 			IdleTimeout:     getDurationEnv("GATEWAY_IDLE_TIMEOUT", 60*time.Second),
 			ShutdownTimeout: getDurationEnv("GATEWAY_SHUTDOWN_TIMEOUT", 30*time.Second),
+		},
+		Database: DatabaseConfig{
+			URL: getEnv("DATABASE_URL", "postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable"),
 		},
 		Services: ServiceEndpoints{
 			TokenEngine:      getEnv("TOKEN_ENGINE_URL", "http://token-engine:8081"),

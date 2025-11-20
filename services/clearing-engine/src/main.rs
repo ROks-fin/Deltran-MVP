@@ -2,8 +2,10 @@ use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use chrono::Utc;
 use prometheus::{Encoder, TextEncoder};
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{info, error};
 use tracing_subscriber;
+
+mod nats_consumer;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ClearingWindow {
@@ -50,6 +52,17 @@ async fn main() -> std::io::Result<()> {
         .unwrap_or(8085);
 
     info!("🚀 Clearing Engine starting on port {}", service_port);
+
+    // Start NATS consumer for clearing submissions
+    let nats_url = std::env::var("NATS_URL")
+        .unwrap_or_else(|_| "nats://localhost:4222".to_string());
+
+    info!("🔄 Starting NATS consumer for multilateral netting...");
+    if let Err(e) = nats_consumer::start_clearing_consumer(&nats_url).await {
+        error!("Failed to start NATS consumer: {}", e);
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
+    }
+    info!("✅ NATS consumer started successfully");
 
     let bind_address = format!("0.0.0.0:{}", service_port);
 

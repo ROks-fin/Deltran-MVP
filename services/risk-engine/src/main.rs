@@ -3,7 +3,7 @@ use actix_web::{middleware, web, App, HttpServer};
 use dotenv::dotenv;
 use risk_engine::{
     circuit::CircuitBreaker, config::Config, database, handlers, limits::LimitsManager,
-    scoring::RiskScorer,
+    nats_consumer, scoring::RiskScorer,
 };
 use std::sync::Arc;
 use tracing::{error, info, Level};
@@ -19,6 +19,17 @@ async fn main() -> std::io::Result<()> {
         .init();
 
     info!("Starting Risk Engine...");
+
+    // Start NATS consumer for risk checks
+    let nats_url = std::env::var("NATS_URL")
+        .unwrap_or_else(|_| "nats://localhost:4222".to_string());
+
+    info!("⚠️  Starting NATS consumer for FX risk checks...");
+    if let Err(e) = nats_consumer::start_risk_consumer(&nats_url).await {
+        error!("Failed to start NATS consumer: {}", e);
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
+    }
+    info!("✅ NATS consumer started successfully");
 
     // Load configuration
     let config = Config::from_env().expect("Failed to load configuration");

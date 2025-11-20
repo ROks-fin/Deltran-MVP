@@ -32,6 +32,9 @@ governor = "0.6"
 # Additional utilities
 futures-util = "0.3"
 
+# NATS messaging
+async-nats = "0.33"
+
 # Metrics - Prometheus
 prometheus = { version = "0.13", features = ["process"] }
 lazy_static = "1.4"

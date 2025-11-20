@@ -193,9 +193,8 @@ pub struct ActiveOrHistoricCurrencyAndAmount {
 }
 
 impl ActiveOrHistoricCurrencyAndAmount {
-    pub fn to_decimal(&self) -> Result<Decimal, std::num::ParseFloatError> {
+    pub fn to_decimal(&self) -> Result<Decimal, rust_decimal::Error> {
         self.amount.parse::<Decimal>()
-            .map_err(|_| std::num::ParseFloatError { kind: std::num::FloatErrorKind::Invalid })
     }
 
     pub fn from_decimal(currency: String, amount: Decimal) -> Self {

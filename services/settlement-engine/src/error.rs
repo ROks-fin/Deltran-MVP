@@ -53,6 +53,9 @@ pub enum SettlementError {
     #[error("Invalid amount: {0}")]
     InvalidAmount(String),
 
+    #[error("Validation error: {0}")]
+    Validation(String),
+
     #[error("Configuration error: {0}")]
     ConfigError(#[from] anyhow::Error),
 
@@ -70,6 +73,16 @@ pub enum SettlementError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+}
+
+// Implement From for async_nats errors
+impl<T> From<async_nats::error::Error<T>> for SettlementError
+where
+    T: std::fmt::Debug + std::fmt::Display + Clone + PartialEq,
+{
+    fn from(err: async_nats::error::Error<T>) -> Self {
+        SettlementError::Nats(err.to_string())
+    }
 }
 
 pub type Result<T> = std::result::Result<T, SettlementError>;

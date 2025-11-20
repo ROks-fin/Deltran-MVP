@@ -1,0 +1,726 @@
+{
+  "catalog_version": "1.0",
+  "generated": "2025-11-18",
+  "total_messages": 136,
+  "messages": {
+    "pain.001.001.12": {
+      "name": "CustomerCreditTransferInitiation",
+      "area": "PaymentsInitiation",
+      "description": "Customer/bank initiates payment request",
+      "direction": "Inbound to DelTran",
+      "priority": "P0",
+      "used_by": ["Gateway", "ObligationEngine"],
+      "triggers": "Creates obligation record in PENDING_FUNDING state",
+      "response": "pain.002",
+      "xsd_location": "iso20022/payments_initiation/pain.001.001.12.xsd",
+      "key_fields": [
+        "GrpHdr.MsgId",
+        "PmtInf.PmtInfId",
+        "CdtTrfTxInf.PmtId.EndToEndId",
+        "CdtTrfTxInf.Amt.InstdAmt",
+        "CdtTrfTxInf.Cdtr",
+        "CdtTrfTxInf.Dbtr"
+      ],
+      "use_case": "Primary entry point for customer-initiated payments into DelTran"
+    },
+    "pain.002.001.14": {
+      "name": "CustomerPaymentStatusReport",
+      "area": "PaymentsInitiation",
+      "description": "Status report for customer payment",
+      "direction": "Outbound from DelTran",
+      "priority": "P0",
+      "used_by": ["Gateway", "NotificationEngine"],
+      "triggered_by": "Any status change in obligation/settlement",
+      "xsd_location": "iso20022/payments_initiation/pain.002.001.14.xsd",
+      "key_fields": [
+        "OrgnlMsgId",
+        "OrgnlEndToEndId",
+        "TxSts (ACCP/ACSC/RJCT)",
+        "StsRsnInf.Rsn.Cd"
+      ],
+      "status_codes": {
+        "ACCP": "AcceptedCustomerProfile - Payment accepted",
+        "ACTC": "AcceptedTechnicalValidation",
+        "ACSC": "AcceptedSettlementCompleted - SUCCESS",
+        "RJCT": "Rejected"
+      },
+      "use_case": "Notify customer/bank of payment status changes"
+    },
+    "pain.007.001.12": {
+      "name": "CustomerPaymentReversal",
+      "area": "PaymentsInitiation",
+      "description": "Customer requests payment reversal",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "SettlementEngine"],
+      "xsd_location": "iso20022/payments_initiation/pain.007.001.12.xsd",
+      "use_case": "Customer-initiated reversal before settlement"
+    },
+    "pain.008.001.11": {
+      "name": "CustomerDirectDebitInitiation",
+      "area": "PaymentsInitiation",
+      "description": "Direct debit instruction",
+      "direction": "Inbound to DelTran",
+      "priority": "P3",
+      "used_by": ["Gateway", "ObligationEngine"],
+      "xsd_location": "iso20022/payments_initiation/pain.008.001.11.xsd",
+      "use_case": "Future: Direct debit support"
+    },
+    "pacs.002.001.15": {
+      "name": "FIToFIPaymentStatusReport",
+      "area": "PaymentsClearingAndSettlement",
+      "description": "FI-to-FI payment status",
+      "direction": "Outbound from DelTran",
+      "priority": "P0",
+      "used_by": ["SettlementEngine", "Gateway"],
+      "triggered_by": "Settlement completion or rejection",
+      "xsd_location": "iso20022/payments_clearing_and_settlement/pacs.002.001.15.xsd",
+      "mdr_reference": "iso20022/payments_clearing_and_settlement/ISO20022_MDRPart2_PaymentsClearingAndSettlement_2024_2025_v1.pdf",
+      "key_fields": [
+        "OrgnlInstrId",
+        "OrgnlEndToEndId",
+        "TxSts",
+        "StsRsnInf"
+      ],
+      "use_case": "Confirm settlement status to banks"
+    },
+    "pacs.003.001.11": {
+      "name": "FIToFICustomerDirectDebit",
+      "area": "PaymentsClearingAndSettlement",
+      "description": "FI-to-FI direct debit",
+      "direction": "Inbound/Outbound",
+      "priority": "P3",
+      "used_by": ["Gateway", "SettlementEngine"],
+      "xsd_location": "iso20022/payments_clearing_and_settlement/pacs.003.001.11.xsd",
+      "use_case": "Future: Interbank direct debit"
+    },
+    "pacs.004.001.14": {
+      "name": "PaymentReturn",
+      "area": "PaymentsClearingAndSettlement",
+      "description": "Return rejected payment",
+      "direction": "Inbound/Outbound",
+      "priority": "P1",
+      "used_by": ["Gateway", "SettlementEngine", "TokenEngine"],
+      "triggers": "Reverse obligation, burn tokens, update balances",
+      "xsd_location": "iso20022/payments_clearing_and_settlement/pacs.004.001.14.xsd",
+      "key_fields": [
+        "OrgnlInstrId",
+        "OrgnlEndToEndId",
+        "RtrdIntrBkSttlmAmt",
+        "RtrRsnInf.Rsn.Cd"
+      ],
+      "return_reasons": {
+        "AC01": "IncorrectAccountNumber",
+        "AC04": "ClosedAccountNumber",
+        "AC06": "BlockedAccount",
+        "AM04": "InsufficientFunds",
+        "AM05": "Duplication"
+      },
+      "use_case": "Handle failed/rejected payments with full reversal"
+    },
+    "pacs.007.001.13": {
+      "name": "FIToFIPaymentReversal",
+      "area": "PaymentsClearingAndSettlement",
+      "description": "Request payment reversal",
+      "direction": "Inbound/Outbound",
+      "priority": "P2",
+      "used_by": ["Gateway", "SettlementEngine"],
+      "xsd_location": "iso20022/payments_clearing_and_settlement/pacs.007.001.13.xsd",
+      "use_case": "Bank-initiated reversal after settlement"
+    },
+    "pacs.008.001.13": {
+      "name": "FIToFICustomerCreditTransfer",
+      "area": "PaymentsClearingAndSettlement",
+      "description": "Core FI-to-FI payment message",
+      "direction": "Inbound/Outbound",
+      "priority": "P0",
+      "used_by": ["Gateway", "ClearingEngine", "SettlementEngine"],
+      "triggers_inbound": "Payment received from bank → Clearing → Settlement",
+      "triggers_outbound": "Settlement executes → Send payment to beneficiary bank",
+      "xsd_location": "iso20022/payments_clearing_and_settlement/pacs.008.001.13.xsd",
+      "mdr_reference": "ISO20022_MDRPart2_PaymentsClearingAndSettlement_2024_2025_v1.pdf",
+      "key_fields": [
+        "GrpHdr.MsgId",
+        "GrpHdr.SttlmInf",
+        "CdtTrfTxInf.PmtId.InstrId",
+        "CdtTrfTxInf.PmtId.EndToEndId",
+        "CdtTrfTxInf.PmtId.UETR",
+        "CdtTrfTxInf.IntrBkSttlmAmt",
+        "CdtTrfTxInf.IntrBkSttlmDt",
+        "CdtTrfTxInf.DbtrAgt",
+        "CdtTrfTxInf.CdtrAgt",
+        "CdtTrfTxInf.Dbtr",
+        "CdtTrfTxInf.Cdtr",
+        "CdtTrfTxInf.RmtInf"
+      ],
+      "use_case": "MOST IMPORTANT - Core settlement message between banks and DelTran",
+      "critical": true
+    },
+    "pacs.009.001.12": {
+      "name": "FinancialInstitutionCreditTransfer",
+      "area": "PaymentsClearingAndSettlement",
+      "description": "Bank-to-bank transfer (not customer)",
+      "direction": "Inbound/Outbound",
+      "priority": "P1",
+      "used_by": ["Gateway", "SettlementEngine"],
+      "xsd_location": "iso20022/payments_clearing_and_settlement/pacs.009.001.12.xsd",
+      "use_case": "Interbank settlements, liquidity transfers"
+    },
+    "pacs.010.001.06": {
+      "name": "FIToFICustomerDirectDebitRequest",
+      "area": "PaymentsClearingAndSettlement",
+      "description": "Direct debit request between banks",
+      "direction": "Inbound/Outbound",
+      "priority": "P3",
+      "used_by": ["Gateway", "SettlementEngine"],
+      "xsd_location": "iso20022/payments_clearing_and_settlement/pacs.010.001.06.xsd",
+      "use_case": "Future: Direct debit support"
+    },
+    "pacs.028.001.06": {
+      "name": "FIToFIPaymentStatusRequest",
+      "area": "PaymentsClearingAndSettlement",
+      "description": "Bank queries payment status",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "ReportingEngine"],
+      "response": "pacs.002",
+      "xsd_location": "iso20022/payments_clearing_and_settlement/pacs.028.001.06.xsd",
+      "use_case": "Status query API for banks"
+    },
+    "pacs.029.001.02": {
+      "name": "MultilateralSettlementRequest",
+      "area": "MultilateralSettlement",
+      "description": "Multilateral netting result",
+      "direction": "Internal (Clearing → Settlement)",
+      "priority": "P1",
+      "used_by": ["ClearingEngine", "SettlementEngine"],
+      "xsd_location": "iso20022/multilateral_settlement/pacs.029.001.02.xsd",
+      "mdr_reference": "iso20022/multilateral_settlement/ISO20022_MDRPart2_MultilateralSettlement_2023_2024_v1.pdf",
+      "key_fields": [
+        "SttlmSsnIdr",
+        "Ptcpt (participants)",
+        "Ptcpt.NtSttlmAmt (net amount)",
+        "Ptcpt.CdtDbtInd (CRDT/DBIT)"
+      ],
+      "use_case": "Clearing Engine generates net positions after multilateral netting",
+      "critical": true
+    },
+    "camt.052.001.13": {
+      "name": "BankToCustomerAccountReport",
+      "area": "BankToCustomerCashManagement",
+      "description": "Intraday account report",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["TokenEngine", "ReportingEngine"],
+      "xsd_location": "iso20022/banktocustomer_cash_management/camt.052.001.13.xsd",
+      "use_case": "Intraday balance monitoring"
+    },
+    "camt.053.001.13": {
+      "name": "BankToCustomerStatement",
+      "area": "BankToCustomerCashManagement",
+      "description": "EOD bank statement",
+      "direction": "Inbound to DelTran / Outbound from DelTran",
+      "priority": "P1",
+      "used_by": ["TokenEngine", "ReportingEngine", "Reconciliation"],
+      "triggers": "EOD reconciliation of emi_accounts balances",
+      "xsd_location": "iso20022/banktocustomer_cash_management/camt.053.001.13.xsd",
+      "mdr_reference": "iso20022/banktocustomer_cash_management/ISO20022_MDRPart2_BankToCustomerCashManagement_2024_2025_v1.pdf",
+      "key_fields": [
+        "Stmt.Acct",
+        "Stmt.Bal (OPBD/CLBD)",
+        "Stmt.Ntry (transactions)",
+        "Ntry.Amt",
+        "Ntry.CdtDbtInd",
+        "Ntry.Sts (BOOK/PDNG)"
+      ],
+      "use_case": "Daily reconciliation - compare closing balance with internal records",
+      "critical": true
+    },
+    "camt.054.001.13": {
+      "name": "BankToCustomerDebitCreditNotification",
+      "area": "BankToCustomerCashManagement",
+      "description": "Real-time funding event notification",
+      "direction": "Inbound to DelTran",
+      "priority": "P0",
+      "used_by": ["Gateway", "TokenEngine", "ObligationEngine"],
+      "triggers": "FUNDING EVENT - Mint tokens, update emi_accounts.balance, match obligations",
+      "xsd_location": "iso20022/banktocustomer_cash_management/camt.054.001.13.xsd",
+      "mdr_reference": "iso20022/banktocustomer_cash_management/ISO20022_MDRPart2_BankToCustomerCashManagement_2024_2025_v1.pdf",
+      "key_fields": [
+        "Ntfctn.Ntry.Amt",
+        "Ntfctn.Ntry.CdtDbtInd (must be CRDT)",
+        "Ntfctn.Ntry.Sts (must be BOOK)",
+        "Ntfctn.Ntry.AcctSvcrRef",
+        "NtryDtls.TxDtls.Refs.EndToEndId",
+        "Ntfctn.Ntry.BookgDt",
+        "Ntfctn.Ntry.ValDt"
+      ],
+      "validation": "Must be credit (CRDT), must be booked (not pending)",
+      "use_case": "MOST CRITICAL - This is how DelTran knows real money arrived!",
+      "critical": true,
+      "example_flow": "Bank sends camt.054 → Token Engine mints tokens → Obligation Engine matches → Payment released for clearing"
+    },
+    "camt.060.001.07": {
+      "name": "AccountReportingRequest",
+      "area": "BankToCustomerCashManagement",
+      "description": "Request account report",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "ReportingEngine"],
+      "response": "camt.052 or camt.053",
+      "xsd_location": "iso20022/banktocustomer_cash_management/camt.060.001.07.xsd",
+      "use_case": "On-demand statement generation"
+    },
+    "camt.026.001.10": {
+      "name": "UnableToApply",
+      "area": "ExceptionsAndInvestigations",
+      "description": "Cannot process payment",
+      "direction": "Inbound/Outbound",
+      "priority": "P2",
+      "used_by": ["Gateway", "SettlementEngine"],
+      "xsd_location": "iso20022/exceptions_investigations/camt.026.001.10.xsd",
+      "use_case": "Signal that payment cannot be applied/processed"
+    },
+    "camt.027.001.10": {
+      "name": "ClaimNonReceipt",
+      "area": "ExceptionsAndInvestigations",
+      "description": "Claim payment not received",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "ComplianceEngine"],
+      "triggers": "Open investigation case",
+      "response": "camt.029",
+      "xsd_location": "iso20022/exceptions_investigations/camt.027.001.10.xsd",
+      "use_case": "Bank claims payment was sent but not received - start investigation"
+    },
+    "camt.029.001.13": {
+      "name": "ResolutionOfInvestigation",
+      "area": "ExceptionsAndInvestigations",
+      "description": "Close investigation with resolution",
+      "direction": "Outbound from DelTran",
+      "priority": "P2",
+      "used_by": ["ComplianceEngine", "Gateway"],
+      "triggered_by": "Investigation completed",
+      "xsd_location": "iso20022/exceptions_investigations/camt.029.001.13.xsd",
+      "use_case": "Report investigation findings and resolution"
+    },
+    "camt.055.001.12": {
+      "name": "CustomerPaymentCancellationRequest",
+      "area": "ExceptionsAndInvestigations",
+      "description": "Customer requests cancellation",
+      "direction": "Inbound to DelTran",
+      "priority": "P1",
+      "used_by": ["Gateway", "SettlementEngine", "ObligationEngine"],
+      "triggers": "Cancel obligation if not settled, else initiate return",
+      "response": "pacs.002 or pacs.004",
+      "xsd_location": "iso20022/exceptions_investigations/camt.055.001.12.xsd",
+      "use_case": "Customer wants to cancel payment before/after settlement"
+    },
+    "camt.056.001.11": {
+      "name": "FIToFIPaymentCancellationRequest",
+      "area": "ExceptionsAndInvestigations",
+      "description": "Bank requests cancellation",
+      "direction": "Inbound to DelTran",
+      "priority": "P1",
+      "used_by": ["Gateway", "SettlementEngine"],
+      "triggers": "Cancel or return payment depending on status",
+      "xsd_location": "iso20022/exceptions_investigations/camt.056.001.11.xsd",
+      "use_case": "Bank-initiated cancellation request"
+    },
+    "camt.087.001.09": {
+      "name": "RequestToModifyPayment",
+      "area": "ExceptionsAndInvestigations",
+      "description": "Request to modify payment in flight",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "SettlementEngine"],
+      "xsd_location": "iso20022/exceptions_investigations/camt.087.001.09.xsd",
+      "use_case": "Modify payment details before settlement completes"
+    },
+    "camt.057.001.08": {
+      "name": "NotificationToReceive",
+      "area": "NotificationToReceive",
+      "description": "Pre-advice: expect incoming payment",
+      "direction": "Outbound from DelTran",
+      "priority": "P2",
+      "used_by": ["SettlementEngine", "NotificationEngine", "Gateway"],
+      "triggered_by": "Before sending pacs.008",
+      "xsd_location": "iso20022/notification_to_receive/camt.057.001.08.xsd",
+      "use_case": "Notify beneficiary bank to expect incoming payment"
+    },
+    "camt.058.001.09": {
+      "name": "NotificationToReceiveCancellationAdvice",
+      "area": "NotificationToReceive",
+      "description": "Cancel pre-advice",
+      "direction": "Outbound from DelTran",
+      "priority": "P2",
+      "used_by": ["SettlementEngine", "Gateway"],
+      "xsd_location": "iso20022/notification_to_receive/camt.058.001.09.xsd",
+      "use_case": "Cancel previous notification if settlement cancelled"
+    },
+    "camt.059.001.08": {
+      "name": "NotificationToReceiveStatusReport",
+      "area": "NotificationToReceive",
+      "description": "Status of pre-advice",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "ReportingEngine"],
+      "xsd_location": "iso20022/notification_to_receive/camt.059.001.08.xsd",
+      "use_case": "Bank confirms receipt of pre-advice"
+    },
+    "camt.105.001.03": {
+      "name": "ChargesReport",
+      "area": "ChargesManagement",
+      "description": "Report fees/charges",
+      "direction": "Outbound from DelTran",
+      "priority": "P2",
+      "used_by": ["ReportingEngine", "Gateway"],
+      "xsd_location": "iso20022/charges_management/camt.105.001.03.xsd",
+      "mdr_reference": "iso20022/charges_management/ISO20022_MDRPart2_ChargesManagement_2024_2025_v1.pdf",
+      "use_case": "Transparent fee reporting to banks/customers"
+    },
+    "camt.106.001.03": {
+      "name": "ChargesRefundRequest",
+      "area": "ChargesManagement",
+      "description": "Request fee refund",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "ReportingEngine"],
+      "xsd_location": "iso20022/charges_management/camt.106.001.03.xsd",
+      "use_case": "Bank disputes fee and requests refund"
+    },
+    "camt.110.001.01": {
+      "name": "RequestForPaymentStatusUpdate",
+      "area": "ExceptionsModernisation",
+      "description": "Modern status update request",
+      "direction": "Inbound to DelTran",
+      "priority": "P3",
+      "used_by": ["Gateway", "TrackingService"],
+      "response": "camt.111",
+      "xsd_location": "iso20022/exceptions_investigations_modernisation/camt.110.001.01.xsd",
+      "use_case": "Modern alternative to legacy status queries"
+    },
+    "camt.111.001.02": {
+      "name": "PaymentStatusUpdate",
+      "area": "ExceptionsModernisation",
+      "description": "Modern status update response",
+      "direction": "Outbound from DelTran",
+      "priority": "P3",
+      "used_by": ["TrackingService", "NotificationEngine"],
+      "xsd_location": "iso20022/exceptions_investigations_modernisation/camt.111.001.02.xsd",
+      "use_case": "Push status updates to requestor"
+    },
+    "acmt.007.001.05": {
+      "name": "AccountOpeningInstruction",
+      "area": "BankAccountManagement",
+      "description": "Open new account",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "TokenEngine"],
+      "triggers": "Create record in emi_accounts table",
+      "response": "acmt.011",
+      "xsd_location": "iso20022/bank_account_management/acmt.007.001.05.xsd",
+      "mdr_reference": "iso20022/bank_account_management/ISO20022_MDRPart2_BankAccountManagement_2023_2024_v1.pdf",
+      "key_fields": [
+        "AcctId.IBAN",
+        "AcctId.Othr.Id",
+        "Acct.Ccy",
+        "AcctOwnr.Nm"
+      ],
+      "use_case": "Bank opens EMI account for DelTran"
+    },
+    "acmt.009.001.04": {
+      "name": "AccountModificationRequest",
+      "area": "BankAccountManagement",
+      "description": "Modify account details",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "TokenEngine"],
+      "triggers": "Update emi_accounts record",
+      "xsd_location": "iso20022/bank_account_management/acmt.009.001.04.xsd",
+      "use_case": "Update account holder details, limits, etc."
+    },
+    "acmt.010.001.04": {
+      "name": "AccountClosureRequest",
+      "area": "BankAccountManagement",
+      "description": "Close account",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "TokenEngine"],
+      "triggers": "Mark emi_accounts as inactive",
+      "xsd_location": "iso20022/bank_account_management/acmt.010.001.04.xsd",
+      "use_case": "Close EMI account after final settlement"
+    },
+    "acmt.011.001.04": {
+      "name": "AccountStatusReport",
+      "area": "BankAccountManagement",
+      "description": "Report account status",
+      "direction": "Outbound from DelTran",
+      "priority": "P2",
+      "used_by": ["TokenEngine", "Gateway"],
+      "triggered_by": "Account lifecycle events",
+      "xsd_location": "iso20022/bank_account_management/acmt.011.001.04.xsd",
+      "use_case": "Notify bank of account status changes"
+    },
+    "acmt.022.001.04": {
+      "name": "IdentificationModificationAdvice",
+      "area": "ChangeVerifyAccountIdentification",
+      "description": "Notify account identifier change",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "TokenEngine"],
+      "xsd_location": "iso20022/changeverify_account_identification/acmt.022.001.04.xsd",
+      "use_case": "Bank changed IBAN/account number"
+    },
+    "acmt.023.001.04": {
+      "name": "IdentificationVerificationRequest",
+      "area": "ChangeVerifyAccountIdentification",
+      "description": "Verify account identification",
+      "direction": "Inbound to DelTran",
+      "priority": "P2",
+      "used_by": ["Gateway", "ComplianceEngine"],
+      "response": "acmt.024",
+      "xsd_location": "iso20022/changeverify_account_identification/acmt.023.001.04.xsd",
+      "use_case": "Verify IBAN/account before settlement"
+    },
+    "acmt.024.001.04": {
+      "name": "IdentificationVerificationReport",
+      "area": "ChangeVerifyAccountIdentification",
+      "description": "Result of ID verification",
+      "direction": "Outbound from DelTran",
+      "priority": "P2",
+      "used_by": ["ComplianceEngine", "Gateway"],
+      "xsd_location": "iso20022/changeverify_account_identification/acmt.024.001.04.xsd",
+      "use_case": "Confirm account verification result"
+    },
+    "trck.001.001.04": {
+      "name": "PaymentTrackingRequest",
+      "area": "PaymentTracking",
+      "description": "Query payment tracking status",
+      "direction": "Inbound to DelTran",
+      "priority": "P3",
+      "used_by": ["Gateway", "TrackingService"],
+      "response": "trck.002",
+      "xsd_location": "iso20022/payment_tracking/trck.001.001.04.xsd",
+      "key_fields": [
+        "PmtId.UETR"
+      ],
+      "use_case": "SWIFT gpi-style tracking query"
+    },
+    "trck.002.001.03": {
+      "name": "PaymentTrackingStatusReport",
+      "area": "PaymentTracking",
+      "description": "Payment tracking response",
+      "direction": "Outbound from DelTran",
+      "priority": "P3",
+      "used_by": ["TrackingService", "Gateway"],
+      "xsd_location": "iso20022/payment_tracking/trck.002.001.03.xsd",
+      "key_fields": [
+        "OrgnlPmtId.UETR",
+        "TxSts",
+        "PrcgDtTms.AccptncDtTm",
+        "PrcgDtTms.FnlSttlmDtTm"
+      ],
+      "use_case": "Provide detailed tracking info with timestamps"
+    },
+    "trck.004.001.03": {
+      "name": "PaymentTrackingUpdateRequest",
+      "area": "PaymentTracking",
+      "description": "Update tracking information",
+      "direction": "Inbound/Outbound",
+      "priority": "P3",
+      "used_by": ["TrackingService", "Gateway"],
+      "xsd_location": "iso20022/payment_tracking/trck.004.001.03.xsd",
+      "use_case": "Push tracking status updates"
+    },
+    "remt.001.001.06": {
+      "name": "RemittanceAdvice",
+      "area": "RemittanceAdvice",
+      "description": "Detailed remittance information",
+      "direction": "Inbound/Outbound",
+      "priority": "P3",
+      "used_by": ["Gateway", "ReportingEngine"],
+      "xsd_location": "iso20022/remittance_advice/remt.001.001.06.xsd",
+      "use_case": "Separate detailed invoice/reference data from payment"
+    },
+    "remt.002.001.03": {
+      "name": "RemittanceAdviceNotification",
+      "area": "RemittanceAdvice",
+      "description": "Notify remittance sent",
+      "direction": "Outbound from DelTran",
+      "priority": "P3",
+      "used_by": ["ReportingEngine", "Gateway"],
+      "xsd_location": "iso20022/remittance_advice/remt.002.001.03.xsd",
+      "use_case": "Confirm remittance data delivered"
+    },
+    "admi.004.001.02": {
+      "name": "SystemEventNotification",
+      "area": "MultilateralSettlement",
+      "description": "System event notification",
+      "direction": "Inbound/Outbound",
+      "priority": "P3",
+      "used_by": ["Gateway", "ClearingEngine"],
+      "xsd_location": "iso20022/multilateral_settlement/admi.004.001.02.xsd",
+      "use_case": "System-level notifications"
+    },
+    "admi.024.001.01": {
+      "name": "StaticDataRequest",
+      "area": "NotificationOfCorrespondence",
+      "description": "Request static data",
+      "direction": "Inbound to DelTran",
+      "priority": "P3",
+      "used_by": ["Gateway", "ReportingEngine"],
+      "xsd_location": "iso20022/notification_of_correspondence/admi.024.001.01.xsd",
+      "use_case": "Operational queries for static data"
+    }
+  },
+  "priority_summary": {
+    "P0_messages": [
+      "pain.001.001.12",
+      "pain.002.001.14",
+      "pacs.002.001.15",
+      "pacs.008.001.13",
+      "camt.054.001.13"
+    ],
+    "P1_messages": [
+      "pacs.004.001.14",
+      "pacs.009.001.12",
+      "pacs.029.001.02",
+      "camt.053.001.13",
+      "camt.055.001.12",
+      "camt.056.001.11"
+    ],
+    "P2_messages": [
+      "pain.007.001.12",
+      "pacs.007.001.13",
+      "pacs.028.001.06",
+      "camt.026.001.10",
+      "camt.027.001.10",
+      "camt.029.001.13",
+      "camt.052.001.13",
+      "camt.057.001.08",
+      "camt.058.001.09",
+      "camt.059.001.08",
+      "camt.060.001.07",
+      "camt.087.001.09",
+      "camt.105.001.03",
+      "camt.106.001.03",
+      "acmt.007.001.05",
+      "acmt.009.001.04",
+      "acmt.010.001.04",
+      "acmt.011.001.04",
+      "acmt.022.001.04",
+      "acmt.023.001.04",
+      "acmt.024.001.04"
+    ],
+    "P3_messages": [
+      "pain.008.001.11",
+      "pacs.003.001.11",
+      "pacs.010.001.06",
+      "camt.110.001.01",
+      "camt.111.001.02",
+      "trck.001.001.04",
+      "trck.002.001.03",
+      "trck.004.001.03",
+      "remt.001.001.06",
+      "remt.002.001.03",
+      "admi.004.001.02",
+      "admi.024.001.01"
+    ]
+  },
+  "service_mapping": {
+    "Gateway": {
+      "role": "Entry/exit point for all ISO messages",
+      "processes": [
+        "pain.001",
+        "pain.002",
+        "pacs.002",
+        "pacs.004",
+        "pacs.008",
+        "camt.053",
+        "camt.054",
+        "camt.055",
+        "camt.056",
+        "acmt.007",
+        "acmt.009",
+        "acmt.010",
+        "trck.001",
+        "All inbound/outbound"
+      ]
+    },
+    "ObligationEngine": {
+      "role": "Track payment obligations until funded",
+      "processes": [
+        "pain.001 (create obligation)",
+        "camt.054 (match funding)"
+      ]
+    },
+    "TokenEngine": {
+      "role": "Manage EMI accounts and internal tokens",
+      "processes": [
+        "camt.054 (mint tokens)",
+        "camt.053 (reconciliation)",
+        "pacs.004 (burn tokens)",
+        "acmt.007-011 (account lifecycle)"
+      ],
+      "critical": "camt.054 triggers are mission-critical"
+    },
+    "ClearingEngine": {
+      "role": "Netting and clearing",
+      "processes": [
+        "pacs.008 (inbound for netting)",
+        "pacs.029 (multilateral netting output)"
+      ]
+    },
+    "SettlementEngine": {
+      "role": "Execute final settlements",
+      "processes": [
+        "pacs.008 (outbound payment)",
+        "pacs.002 (status report)",
+        "pacs.004 (returns)",
+        "camt.055/056 (cancellations)",
+        "camt.057 (pre-advice)"
+      ]
+    },
+    "ComplianceEngine": {
+      "role": "AML, KYC, investigations",
+      "processes": [
+        "camt.027 (investigations)",
+        "camt.029 (resolutions)",
+        "acmt.023/024 (ID verification)"
+      ]
+    },
+    "ReportingEngine": {
+      "role": "Statements and reports",
+      "processes": [
+        "camt.053 (generate statements)",
+        "camt.105 (fee reports)",
+        "pain.002/pacs.002 (status reports)"
+      ]
+    },
+    "NotificationEngine": {
+      "role": "Notify customers/banks",
+      "processes": [
+        "pain.002",
+        "pacs.002",
+        "camt.057"
+      ]
+    },
+    "TrackingService": {
+      "role": "Payment tracking and analytics",
+      "processes": [
+        "trck.001",
+        "trck.002",
+        "trck.004",
+        "camt.110/111"
+      ]
+    }
+  },
+  "implementation_notes": {
+    "week_1_2": "Foundation - XML parsing, canonical model, P0 schemas",
+    "week_3_4": "P0 implementation - pain.001, pacs.008, camt.054, pacs.002, pain.002",
+    "week_5_6": "P1 implementation - pacs.004, camt.053, cancellations, pacs.029",
+    "week_7_8": "P2 implementation - Account management, investigations, fees",
+    "week_9_12": "P3 implementation - Tracking, remittance, advanced features"
+  }
+}

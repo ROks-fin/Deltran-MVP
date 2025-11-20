@@ -1,0 +1,54 @@
+[package]
+name = "account-monitor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# Web framework (for health checks)
+actix-web = "4.4"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+quick-xml = { version = "0.31", features = ["serialize"] }
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "rust_decimal"] }
+
+# UUID and Time
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Decimal
+rust_decimal = { version = "1.33", features = ["serde-with-str"] }
+
+# NATS
+async-nats = "0.33"
+
+# HTTP client (для bank API)
+reqwest = { version = "0.11", features = ["json"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Configuration
+dotenv = "0.15"
+
+# Metrics
+prometheus = "0.13"
+lazy_static = "1.4"
+
+# Scheduling
+tokio-cron-scheduler = "0.10"
+
+[[bin]]
+name = "account-monitor"
+path = "src/main.rs"

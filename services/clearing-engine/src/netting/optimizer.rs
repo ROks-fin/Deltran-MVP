@@ -18,8 +18,8 @@ pub fn optimize_graph(
 
     info!("Starting optimization for currency: {}", currency);
 
-    // Check if graph has cycles
-    if !is_cyclic_directed(graph) {
+    // Check if graph has cycles (use &*graph to dereference to immutable)
+    if !is_cyclic_directed(&*graph) {
         info!("No cycles detected in {} graph", currency);
         return Ok(OptimizerStats {
             cycles_found: 0,
@@ -27,8 +27,8 @@ pub fn optimize_graph(
         });
     }
 
-    // Find strongly connected components (SCCs)
-    let sccs = kosaraju_scc(graph);
+    // Find strongly connected components (SCCs) (use &*graph to dereference to immutable)
+    let sccs = kosaraju_scc(&*graph);
 
     for scc in sccs {
         if scc.len() <= 1 {

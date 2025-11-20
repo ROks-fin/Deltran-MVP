@@ -116,8 +116,6 @@ static_resources:
                     retry_on: "5xx,reset,connect-failure,refused-stream"
                     num_retries: 3
                     per_try_timeout: 10s
-                    retry_host_predicate:
-                    - name: envoy.retry_host_predicates.previous_hosts
                     host_selection_retry_max_attempts: 3
                 typed_per_filter_config:
                   envoy.filters.http.local_ratelimit:
@@ -645,12 +643,12 @@ layered_runtime:
         global_downstream_max_connections: 50000
 
 # Statistics configuration
-stats_sinks:
-- name: envoy.stat_sinks.statsd
-  typed_config:
-    "@type": type.googleapis.com/envoy.config.metrics.v3.StatsdSink
-    tcp_cluster_name: prometheus_cluster
-    prefix: envoy
+# stats_sinks:
+# - name: envoy.stat_sinks.statsd
+#   typed_config:
+#     "@type": type.googleapis.com/envoy.config.metrics.v3.StatsdSink
+#     tcp_cluster_name: prometheus_cluster
+#     prefix: envoy
 
 # Overload management
 overload_manager:

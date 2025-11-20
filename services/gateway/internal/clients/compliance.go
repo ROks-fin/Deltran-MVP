@@ -18,16 +18,21 @@ func NewComplianceClient(baseURL string) *ComplianceClient {
 }
 
 // ComplianceCheckRequest represents a compliance check request
+// This matches the Rust backend ComplianceCheckRequest structure
 type ComplianceCheckRequest struct {
-	TransactionID   string  `json:"transaction_id"`
-	SenderBank      string  `json:"sender_bank"`
-	ReceiverBank    string  `json:"receiver_bank"`
-	Amount          float64 `json:"amount"`
-	Currency        string  `json:"currency"`
-	SenderName      string  `json:"sender_name,omitempty"`
-	ReceiverName    string  `json:"receiver_name,omitempty"`
-	SenderCountry   string  `json:"sender_country,omitempty"`
-	ReceiverCountry string  `json:"receiver_country,omitempty"`
+	TransactionID    string  `json:"transaction_id"`      // UUID string
+	SenderName       string  `json:"sender_name"`
+	SenderAccount    string  `json:"sender_account"`
+	SenderCountry    string  `json:"sender_country"`
+	SenderBankID     string  `json:"sender_bank_id"`      // UUID string
+	ReceiverName     string  `json:"receiver_name"`
+	ReceiverAccount  string  `json:"receiver_account"`
+	ReceiverCountry  string  `json:"receiver_country"`
+	ReceiverBankID   string  `json:"receiver_bank_id"`    // UUID string
+	Amount           string  `json:"amount"`              // Decimal as string
+	Currency         string  `json:"currency"`
+	Purpose          string  `json:"purpose,omitempty"`
+	Metadata         interface{} `json:"metadata,omitempty"`
 }
 
 // ComplianceCheckResponse represents a compliance check response

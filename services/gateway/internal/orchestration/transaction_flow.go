@@ -8,6 +8,7 @@ import (
 
 	"deltran/gateway/internal/clients"
 	"deltran/gateway/internal/models"
+	"deltran/gateway/internal/repository"
 )
 
 // TransactionOrchestrator orchestrates the full transaction flow
@@ -18,6 +19,7 @@ type TransactionOrchestrator struct {
 	obligationClient   *clients.ObligationClient
 	tokenClient        *clients.TokenClient
 	notificationClient *clients.NotificationClient
+	bankRepo           *repository.BankRepository
 }
 
 // NewTransactionOrchestrator creates a new transaction orchestrator
@@ -28,6 +30,7 @@ func NewTransactionOrchestrator(
 	obligationClient *clients.ObligationClient,
 	tokenClient *clients.TokenClient,
 	notificationClient *clients.NotificationClient,
+	bankRepo *repository.BankRepository,
 ) *TransactionOrchestrator {
 	return &TransactionOrchestrator{
 		complianceClient:   complianceClient,
@@ -36,6 +39,7 @@ func NewTransactionOrchestrator(
 		obligationClient:   obligationClient,
 		tokenClient:        tokenClient,
 		notificationClient: notificationClient,
+		bankRepo:           bankRepo,
 	}
 }
 
@@ -141,12 +145,32 @@ func (o *TransactionOrchestrator) ProcessTransfer(ctx context.Context, req model
 
 // checkCompliance performs compliance checks
 func (o *TransactionOrchestrator) checkCompliance(ctx context.Context, req models.TransferRequest, txID string) (*models.ComplianceResult, error) {
+	// Get sender bank UUID from database
+	senderBank, err := o.bankRepo.GetBankByCode(ctx, req.SenderBank)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sender bank: %w", err)
+	}
+
+	// Get receiver bank UUID from database
+	receiverBank, err := o.bankRepo.GetBankByCode(ctx, req.ReceiverBank)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get receiver bank: %w", err)
+	}
+
+	// Build compliance check request with proper UUIDs and all required fields
 	checkReq := clients.ComplianceCheckRequest{
-		TransactionID: txID,
-		SenderBank:    req.SenderBank,
-		ReceiverBank:  req.ReceiverBank,
-		Amount:        req.Amount,
-		Currency:      req.FromCurrency,
+		TransactionID:    txID,
+		SenderName:       req.SenderName,
+		SenderAccount:    req.SenderAccount,
+		SenderCountry:    senderBank.Country,
+		SenderBankID:     senderBank.ID,
+		ReceiverName:     req.ReceiverName,
+		ReceiverAccount:  req.ReceiverAccount,
+		ReceiverCountry:  receiverBank.Country,
+		ReceiverBankID:   receiverBank.ID,
+		Amount:           fmt.Sprintf("%.2f", req.Amount),
+		Currency:         req.FromCurrency,
+		Purpose:          req.Reference,
 	}
 
 	resp, err := o.complianceClient.CheckCompliance(ctx, checkReq)

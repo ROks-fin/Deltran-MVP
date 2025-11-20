@@ -1,9 +1,9 @@
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
 use dotenv::dotenv;
-use liquidity_router::{config::Config, handlers, optimizer::ConversionOptimizer, predictor::LiquidityPredictor};
+use liquidity_router::{config::Config, handlers, nats_consumer, optimizer::ConversionOptimizer, predictor::LiquidityPredictor};
 use std::sync::{Arc, Mutex};
-use tracing::{info, Level};
+use tracing::{info, error, Level};
 use tracing_subscriber::FmtSubscriber;
 
 #[actix_web::main]
@@ -20,6 +20,17 @@ async fn main() -> std::io::Result<()> {
     let config = Config::from_env().expect("Failed to load configuration");
 
     info!("Configuration loaded successfully");
+
+    // Start NATS consumer for liquidity selection
+    let nats_url = std::env::var("NATS_URL")
+        .unwrap_or_else(|_| "nats://localhost:4222".to_string());
+
+    info!("💰 Starting NATS consumer for liquidity selection...");
+    if let Err(e) = nats_consumer::start_liquidity_consumer(&nats_url).await {
+        error!("Failed to start NATS consumer: {}", e);
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
+    }
+    info!("✅ NATS consumer started successfully");
 
     // Initialize predictor and optimizer
     let predictor = Arc::new(Mutex::new(LiquidityPredictor::new()));

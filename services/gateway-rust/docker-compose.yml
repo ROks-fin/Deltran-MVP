@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Gateway
+  gateway-db:
+    image: postgres:15-alpine
+    container_name: deltran-gateway-db
+    environment:
+      POSTGRES_USER: deltran
+      POSTGRES_PASSWORD: deltran
+      POSTGRES_DB: deltran_gateway
+    ports:
+      - "5432:5432"
+    volumes:
+      - gateway-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deltran"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - deltran-network
+
+  # NATS for inter-service messaging
+  nats:
+    image: nats:latest
+    container_name: deltran-nats
+    ports:
+      - "4222:4222"  # Client connections
+      - "8222:8222"  # HTTP monitoring
+      - "6222:6222"  # Cluster connections
+    command: [
+      "-js",  # Enable JetStream
+      "-m", "8222",  # Monitoring port
+      "--store_dir", "/data"
+    ]
+    volumes:
+      - nats-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - deltran-network
+
+  # Gateway Service
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deltran-gateway
+    environment:
+      DATABASE_URL: postgres://deltran:deltran@gateway-db:5432/deltran_gateway
+      NATS_URL: nats://nats:4222
+      BIND_ADDR: 0.0.0.0:8080
+      RUST_LOG: info,deltran_gateway=debug
+    ports:
+      - "8080:8080"
+    depends_on:
+      gateway-db:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    networks:
+      - deltran-network
+    restart: unless-stopped
+
+volumes:
+  gateway-db-data:
+  nats-data:
+
+networks:
+  deltran-network:
+    driver: bridge

@@ -5,13 +5,15 @@ import "time"
 // TransferRequest represents incoming transfer request
 type TransferRequest struct {
 	SenderBank      string  `json:"sender_bank" binding:"required"`
+	SenderName      string  `json:"sender_name" binding:"required"`
+	SenderAccount   string  `json:"sender_account" binding:"required"`
 	ReceiverBank    string  `json:"receiver_bank" binding:"required"`
+	ReceiverName    string  `json:"receiver_name" binding:"required"`
+	ReceiverAccount string  `json:"receiver_account" binding:"required"`
 	Amount          float64 `json:"amount" binding:"required,gt=0"`
 	FromCurrency    string  `json:"from_currency" binding:"required"`
 	ToCurrency      string  `json:"to_currency" binding:"required"`
 	Reference       string  `json:"reference"`
-	SenderAccount   string  `json:"sender_account" binding:"required"`
-	ReceiverAccount string  `json:"receiver_account" binding:"required"`
 	IdempotencyKey  string  `json:"idempotency_key"`
 }
 

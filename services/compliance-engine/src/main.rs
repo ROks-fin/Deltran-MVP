@@ -11,6 +11,8 @@ use compliance_engine::{
 use std::sync::Arc;
 use tracing::{error, info};
 
+mod nats_consumer;
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Initialize tracing
@@ -47,6 +49,17 @@ async fn main() -> std::io::Result<()> {
     let pep_checker = Arc::new(PepChecker::new());
 
     info!("Compliance components initialized");
+
+    // Start NATS consumer for compliance checks
+    let nats_url = std::env::var("NATS_URL")
+        .unwrap_or_else(|_| "nats://localhost:4222".to_string());
+
+    info!("🔒 Starting NATS consumer for compliance checks...");
+    if let Err(e) = nats_consumer::start_compliance_consumer(&nats_url).await {
+        error!("Failed to start NATS consumer: {}", e);
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
+    }
+    info!("✅ NATS consumer started successfully");
 
     // Start HTTP server
     let bind_address = format!("{}:{}", config.server.host, config.server.port);

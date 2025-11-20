@@ -111,7 +111,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - SERVICE_PORT=8080
@@ -140,7 +140,7 @@ services:
     ports:
       - "8081:8081"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - SERVICE_PORT=8081
@@ -160,7 +160,7 @@ services:
     ports:
       - "8082:8082"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - SERVICE_PORT=8082
@@ -180,7 +180,7 @@ services:
     ports:
       - "8083:8083"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - SERVICE_PORT=8083
@@ -200,7 +200,7 @@ services:
     ports:
       - "8084:8084"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - SERVICE_PORT=8084
@@ -220,7 +220,7 @@ services:
     ports:
       - "8085:8085"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - SERVICE_PORT=8085
@@ -240,7 +240,7 @@ services:
     ports:
       - "8086:8086"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - SERVICE_PORT=8086
@@ -260,7 +260,7 @@ services:
     ports:
       - "8087:8087"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - HTTP_PORT=8087
@@ -281,7 +281,7 @@ services:
     ports:
       - "8088:8088"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - SERVICE_PORT=8088
@@ -301,7 +301,7 @@ services:
     ports:
       - "8089:8089"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - NATS_URL=nats://nats:4222
       - SERVICE_PORT=8089

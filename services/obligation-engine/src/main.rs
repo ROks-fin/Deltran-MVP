@@ -11,8 +11,10 @@ use obligation_engine::{
     services::ObligationService,
     token_client::TokenEngineClient,
 };
-use tracing::{info, Level};
+use tracing::{info, error, Level};
 use tracing_subscriber::FmtSubscriber;
+
+mod nats_consumer;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -71,6 +73,15 @@ async fn main() -> std::io::Result<()> {
     ));
 
     info!("Token Engine client initialized");
+
+    // Start NATS consumer for obligation creation
+    let nats_url = config.nats.url.clone();
+    info!("📋 Starting NATS consumer for obligation creation...");
+    if let Err(e) = nats_consumer::start_obligation_consumer(&nats_url).await {
+        error!("Failed to start NATS consumer: {}", e);
+        return Err(std::io::Error::new(std::io::ErrorKind::Other, e));
+    }
+    info!("✅ NATS consumer started successfully");
 
     // Initialize service
     let service = Arc::new(ObligationService::new(

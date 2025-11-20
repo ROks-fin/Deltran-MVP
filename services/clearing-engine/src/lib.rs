@@ -10,6 +10,7 @@ pub mod window;
 pub mod orchestrator;
 pub mod iso20022;
 pub mod metrics;
+pub mod nats_consumer;
 
 // Re-exports
 pub use errors::{ClearingError, Result};
