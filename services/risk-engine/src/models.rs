@@ -164,3 +164,96 @@ pub struct ErrorResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<serde_json::Value>,
 }
+
+// ===== Settlement Path Selection =====
+/// Settlement path options based on risk assessment and market conditions
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum SettlementPath {
+    /// Instant liquidity buy - Liquidity Engine selects best FX rate and executes immediately
+    InstantBuy {
+        fx_provider: String,
+        estimated_rate: Decimal,
+        estimated_cost_bps: i32,
+    },
+    /// Hedging - Full or partial hedging through derivatives
+    Hedging {
+        hedge_type: HedgeType,
+        hedge_ratio: Decimal,  // 0.0 - 1.0 (partial to full)
+        instrument: String,
+    },
+    /// Standard clearing - Net through clearing window
+    Clearing {
+        clearing_window_id: Option<Uuid>,
+        expected_netting_benefit: Decimal,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum HedgeType {
+    Full,      // 100% hedge
+    Partial,   // Partial hedge based on risk
+    Dynamic,   // Dynamic hedging adjusted over time
+}
+
+/// Settlement path recommendation with full analysis
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SettlementPathRecommendation {
+    pub transaction_id: Uuid,
+    pub recommended_path: SettlementPath,
+    pub alternative_paths: Vec<SettlementPathOption>,
+    pub reasoning: String,
+    pub confidence: f64,
+    pub estimated_total_cost_bps: i32,
+    pub estimated_execution_time_ms: u64,
+    pub market_conditions: MarketConditions,
+    pub calculated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SettlementPathOption {
+    pub path: SettlementPath,
+    pub score: f64,          // 0-100, higher is better
+    pub cost_bps: i32,
+    pub execution_time_ms: u64,
+    pub risk_factors: Vec<String>,
+}
+
+/// Market conditions snapshot for path selection
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MarketConditions {
+    pub fx_volatility: FxVolatility,
+    pub liquidity_depth: LiquidityDepth,
+    pub clearing_window_status: ClearingWindowStatus,
+    pub counterparty_positions: CounterpartyPositions,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum FxVolatility {
+    Low,      // < 0.5% daily
+    Normal,   // 0.5% - 1.5% daily
+    High,     // > 1.5% daily
+    Extreme,  // > 3% daily
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum LiquidityDepth {
+    Deep,     // Large volumes available
+    Normal,   // Standard market depth
+    Thin,     // Limited liquidity
+    Stressed, // Market stress conditions
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum ClearingWindowStatus {
+    Open,          // Window accepting obligations
+    ClosingSoon,   // < 15 minutes to close
+    Closed,        // Window closed
+    NotAvailable,  // No window for corridor
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CounterpartyPositions {
+    pub has_offsetting_flow: bool,
+    pub potential_netting_amount: Decimal,
+    pub counterparty_count: u32,
+}

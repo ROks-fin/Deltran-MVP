@@ -7,6 +7,7 @@ use tracing::{info, error, warn};
 use uuid::Uuid;
 use futures_util::StreamExt;
 use rust_decimal::Decimal;
+use crate::models::NetPosition;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CanonicalPayment {
@@ -53,6 +54,18 @@ pub struct ClearingSubmission {
     pub obligation: ObligationCreatedEvent,
 }
 
+/// Local clearing submission - direct from Obligation Engine (bypasses Risk/Liquidity)
+#[derive(Debug, Deserialize)]
+pub struct LocalClearingSubmission {
+    pub payment: CanonicalPayment,
+    pub obligation: ObligationCreatedEvent,
+    pub routing_type: String,        // "LOCAL_DIRECT"
+    pub jurisdiction: String,        // Country code
+    pub settlement_type: String,     // "INSTANT"
+    pub skip_risk_check: bool,
+    pub skip_liquidity_router: bool,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ClearingAcceptedEvent {
     pub obligation_id: Uuid,
@@ -71,12 +84,17 @@ pub async fn start_clearing_consumer(nats_url: &str) -> anyhow::Result<()> {
     let nats_client = async_nats::connect(nats_url).await?;
     info!("✅ Connected to NATS: {}", nats_url);
 
-    // Subscribe to clearing submission topic
+    // Subscribe to clearing submission topic (international - from Risk/Liquidity path)
     let mut subscriber = nats_client.subscribe("deltran.clearing.submit").await?;
-    info!("📡 Subscribed to: deltran.clearing.submit");
+    info!("📡 Subscribed to: deltran.clearing.submit (international path)");
 
-    // Clone for spawned task
+    // Subscribe to LOCAL clearing submission topic (direct from Obligation Engine)
+    let mut local_subscriber = nats_client.subscribe("deltran.clearing.submit.local").await?;
+    info!("📡 Subscribed to: deltran.clearing.submit.local (local direct path)");
+
+    // Clone for spawned tasks
     let nats_for_publish = nats_client.clone();
+    let nats_for_local = nats_client.clone();
 
     // Spawn consumer task
     tokio::spawn(async move {
@@ -145,7 +163,49 @@ pub async fn start_clearing_consumer(nats_url: &str) -> anyhow::Result<()> {
         warn!("⚠️ Clearing consumer task ended");
     });
 
-    info!("✅ Clearing consumer started successfully");
+    // Spawn LOCAL consumer task (direct from Obligation Engine - same jurisdiction payments)
+    tokio::spawn(async move {
+        info!("🏠 Local clearing consumer task started");
+
+        while let Some(msg) = local_subscriber.next().await {
+            // Parse LocalClearingSubmission from message
+            match serde_json::from_slice::<LocalClearingSubmission>(&msg.payload) {
+                Ok(submission) => {
+                    info!(
+                        "🏠 LOCAL clearing request: {} (Jurisdiction: {}, Type: {})",
+                        submission.obligation.obligation_id,
+                        submission.jurisdiction,
+                        submission.settlement_type
+                    );
+
+                    // For LOCAL payments, we optimize token/fiat routing between banks
+                    // in the same jurisdiction - no FX risk, instant settlement possible
+                    match process_local_clearing(&submission, &nats_for_local).await {
+                        Ok(()) => {
+                            info!(
+                                "✅ Local clearing processed for {} in {} (instant settlement)",
+                                submission.obligation.obligation_id,
+                                submission.jurisdiction
+                            );
+                        }
+                        Err(e) => {
+                            error!(
+                                "❌ Failed to process local clearing for {}: {}",
+                                submission.obligation.obligation_id, e
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to parse LocalClearingSubmission from NATS message: {}", e);
+                }
+            }
+        }
+
+        warn!("⚠️ Local clearing consumer task ended");
+    });
+
+    info!("✅ Clearing consumer started successfully (international + local)");
 
     Ok(())
 }
@@ -282,5 +342,141 @@ pub async fn publish_to_liquidity_router(
     Ok(())
 }
 
-// Re-export NetPosition from models
-use crate::models::NetPosition;
+/// Process LOCAL clearing - direct token/fiat routing between banks in same jurisdiction
+/// This path bypasses Risk Engine and Liquidity Router (no FX risk, single jurisdiction)
+async fn process_local_clearing(
+    submission: &LocalClearingSubmission,
+    nats_client: &Client,
+) -> anyhow::Result<()> {
+    let obligation = &submission.obligation;
+    let payment = &submission.payment;
+
+    info!(
+        "🏠 Processing local clearing: {} → {} ({} {})",
+        payment.debtor_agent.bic,
+        payment.creditor_agent.bic,
+        obligation.amount,
+        obligation.currency
+    );
+
+    // For local payments, we have two routing options:
+    // 1. TOKEN route: If both banks support DelTran tokens, use instant token transfer
+    // 2. FIAT route: Use local payment rails (RTGS, ACH, etc.)
+
+    // Determine optimal route based on bank capabilities
+    let routing_decision = determine_local_routing(payment).await;
+
+    match routing_decision.as_str() {
+        "TOKEN" => {
+            // Route to Settlement Engine for instant token settlement
+            // Token Engine only MINTS tokens - Settlement Engine handles transfers
+            info!("💰 LOCAL: Using TOKEN route for instant settlement");
+
+            let settlement_request = serde_json::json!({
+                "type": "LOCAL_TOKEN",
+                "obligation_id": obligation.obligation_id,
+                "payment_id": payment.deltran_tx_id,
+                "from_bank_bic": payment.debtor_agent.bic,
+                "to_bank_bic": payment.creditor_agent.bic,
+                "amount": obligation.amount,
+                "currency": obligation.currency,
+                "jurisdiction": submission.jurisdiction,
+                "settlement_type": "INSTANT",
+            });
+
+            nats_client
+                .publish("deltran.settlement.execute", serde_json::to_vec(&settlement_request)?.into())
+                .await?;
+
+            info!("📤 Routed to Settlement Engine for local token transfer: {}", obligation.obligation_id);
+        }
+        "FIAT" => {
+            // Route directly to Settlement Engine via local rails
+            info!("🏦 LOCAL: Using FIAT route via local payment rails");
+
+            let settlement_request = serde_json::json!({
+                "type": "LOCAL_FIAT",
+                "obligation_id": obligation.obligation_id,
+                "payment_id": payment.deltran_tx_id,
+                "from_bank_bic": payment.debtor_agent.bic,
+                "to_bank_bic": payment.creditor_agent.bic,
+                "amount": obligation.amount,
+                "currency": obligation.currency,
+                "jurisdiction": submission.jurisdiction,
+                "settlement_rail": get_local_rail(&submission.jurisdiction),
+            });
+
+            nats_client
+                .publish("deltran.settlement.local", serde_json::to_vec(&settlement_request)?.into())
+                .await?;
+
+            info!("📤 Routed to Settlement Engine for local fiat: {}", obligation.obligation_id);
+        }
+        _ => {
+            // Default to clearing window (batch with other local transactions)
+            info!("📋 LOCAL: Adding to clearing window for batch processing");
+
+            // Convert to standard ClearingSubmission for window processing
+            let standard_submission = ClearingSubmission {
+                payment: payment.clone(),
+                obligation: ObligationCreatedEvent {
+                    obligation_id: obligation.obligation_id,
+                    deltran_tx_id: obligation.deltran_tx_id,
+                    uetr: obligation.uetr,
+                    amount: obligation.amount,
+                    currency: obligation.currency.clone(),
+                    debtor_country: obligation.debtor_country.clone(),
+                    creditor_country: obligation.creditor_country.clone(),
+                },
+            };
+
+            let window_id = add_to_clearing_window(&standard_submission).await?;
+            info!("📋 Added local obligation {} to window {}", obligation.obligation_id, window_id);
+        }
+    }
+
+    // Publish local clearing event for tracking
+    let local_event = serde_json::json!({
+        "event_type": "clearing.local.processed",
+        "obligation_id": obligation.obligation_id,
+        "jurisdiction": submission.jurisdiction,
+        "routing_decision": routing_decision,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    });
+
+    nats_client
+        .publish("deltran.events.clearing.local", serde_json::to_vec(&local_event)?.into())
+        .await?;
+
+    Ok(())
+}
+
+/// Determine optimal routing for local payment (TOKEN vs FIAT)
+async fn determine_local_routing(payment: &CanonicalPayment) -> String {
+    // TODO: Check bank capabilities from database
+    // For now, use heuristics:
+    // - High-value payments (> 100K) → FIAT (for regulatory compliance)
+    // - Regular payments → TOKEN (for instant settlement)
+
+    let amount_threshold = Decimal::from(100_000);
+
+    if payment.settlement_amount > amount_threshold {
+        "FIAT".to_string()
+    } else {
+        "TOKEN".to_string()
+    }
+}
+
+/// Get local payment rail for jurisdiction
+fn get_local_rail(jurisdiction: &str) -> String {
+    match jurisdiction {
+        "AE" => "UAE_IPS".to_string(),    // UAE Instant Payment System
+        "IN" => "UPI".to_string(),         // Unified Payments Interface
+        "US" => "FEDNOW".to_string(),      // FedNow
+        "GB" => "FPS".to_string(),         // Faster Payments Service
+        "EU" => "TIPS".to_string(),        // TARGET Instant Payment Settlement
+        "SG" => "FAST".to_string(),        // Fast And Secure Transfers
+        "HK" => "FPS_HK".to_string(),      // Faster Payment System Hong Kong
+        _ => "RTGS".to_string(),           // Default to RTGS
+    }
+}

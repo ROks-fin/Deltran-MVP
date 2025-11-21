@@ -102,23 +102,21 @@ services:
       - deltran-network
     restart: unless-stopped
 
-  # Gateway Service
+  # Gateway Service (Rust - ISO 20022)
   gateway:
     build:
-      context: ./services/gateway
+      context: ./services/gateway-rust
       dockerfile: Dockerfile
-    container_name: deltran-gateway
+    container_name: deltran-gateway-rust
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
-      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgres://deltran:deltran_secure_pass_2024@postgres:5432/deltran_gateway
       - NATS_URL=nats://nats:4222
-      - SERVICE_PORT=8080
+      - BIND_ADDR=0.0.0.0:8080
+      - RUST_LOG=info,deltran_gateway=debug
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       nats:
         condition: service_healthy
@@ -148,6 +146,28 @@ services:
       - postgres
       - redis
       - nats
+    networks:
+      - deltran-network
+
+  # Account Monitor
+  account-monitor:
+    build:
+      context: ./services/account-monitor
+      dockerfile: Dockerfile
+    container_name: deltran-account-monitor
+    ports:
+      - "8090:8090"
+    environment:
+      - DATABASE_URL=postgresql://deltran:deltran_secure_pass_2024@postgres:5432/deltran?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - NATS_URL=nats://nats:4222
+      - SERVICE_PORT=8090
+      - RUST_LOG=info
+    depends_on:
+      - postgres
+      - redis
+      - nats
+      - token-engine
     networks:
       - deltran-network
 

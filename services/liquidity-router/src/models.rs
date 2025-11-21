@@ -78,3 +78,109 @@ pub struct LiquidityPosition {
     pub min_required: Decimal,
     pub as_of: DateTime<Utc>,
 }
+
+// ============================================================
+// MULTI-CURRENCY FX OPTIMIZATION (for International Payments)
+// ============================================================
+
+/// FX Partner - liquidity provider with quotes
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FxPartner {
+    pub partner_id: Uuid,
+    pub partner_code: String,
+    pub partner_name: String,
+    pub jurisdiction: String,           // Country/region
+    pub supported_pairs: Vec<String>,   // ["USD/AED", "EUR/USD", ...]
+    pub is_active: bool,
+    pub priority: i32,                  // Lower = higher priority
+}
+
+/// FX Quote from a partner
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FxQuote {
+    pub quote_id: Uuid,
+    pub partner_id: Uuid,
+    pub partner_code: String,
+    pub currency_pair: String,          // "USD/AED"
+    pub bid_rate: Decimal,              // We sell at this rate
+    pub ask_rate: Decimal,              // We buy at this rate
+    pub spread_bps: i32,
+    pub min_amount: Decimal,
+    pub max_amount: Decimal,
+    pub available_liquidity: Decimal,
+    pub valid_until: DateTime<Utc>,
+    pub execution_time_ms: u64,
+}
+
+/// Multi-hop FX route (e.g., INR → USD → AED)
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FxRoute {
+    pub route_id: Uuid,
+    pub from_currency: String,
+    pub to_currency: String,
+    pub hops: Vec<FxHop>,
+    pub total_rate: Decimal,            // Combined rate
+    pub total_cost_bps: i32,
+    pub total_execution_time_ms: u64,
+    pub confidence: f64,
+}
+
+/// Single hop in FX route
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FxHop {
+    pub hop_number: i32,
+    pub from_currency: String,
+    pub to_currency: String,
+    pub quote: FxQuote,
+    pub amount_in: Decimal,
+    pub amount_out: Decimal,
+}
+
+/// FX Optimization Request (from Risk Engine)
+#[derive(Debug, Deserialize, Clone)]
+pub struct FxOptimizationRequest {
+    pub request_id: Uuid,
+    pub payment_id: Uuid,
+    pub obligation_id: Uuid,
+    pub from_currency: String,
+    pub to_currency: String,
+    pub amount: Decimal,
+    pub sender_jurisdiction: String,
+    pub receiver_jurisdiction: String,
+    pub settlement_path: String,        // "INSTANT_BUY", "CLEARING", etc.
+    pub max_cost_bps: Option<i32>,      // Max acceptable cost
+    pub max_execution_time_ms: Option<u64>,
+}
+
+/// FX Optimization Result
+#[derive(Debug, Serialize, Clone)]
+pub struct FxOptimizationResult {
+    pub request_id: Uuid,
+    pub payment_id: Uuid,
+    pub best_route: FxRoute,
+    pub alternative_routes: Vec<FxRoute>,
+    pub savings_vs_direct_bps: i32,     // How much cheaper than direct
+    pub optimization_notes: String,
+    pub executed: bool,
+    pub execution_id: Option<Uuid>,
+    pub calculated_at: DateTime<Utc>,
+}
+
+/// Partner Liquidity Snapshot
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PartnerLiquiditySnapshot {
+    pub partner_id: Uuid,
+    pub partner_code: String,
+    pub jurisdiction: String,
+    pub currencies: Vec<CurrencyLiquidity>,
+    pub as_of: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CurrencyLiquidity {
+    pub currency: String,
+    pub available_to_buy: Decimal,
+    pub available_to_sell: Decimal,
+    pub daily_limit: Decimal,
+    pub used_today: Decimal,
+}

@@ -88,20 +88,76 @@ pub async fn get_payment_by_id(pool: &PgPool, tx_id: Uuid) -> Result<Option<Cano
 
     match row {
         Some(r) => {
+            use crate::models::canonical::{Party, FinancialInstitution, AccountIdentification, AccountType, ChargeBearer, ComplianceStatus, Priority};
             // Reconstruct CanonicalPayment from DB row
-            // TODO: This is simplified - need full reconstruction
             Ok(Some(CanonicalPayment {
                 deltran_tx_id: r.deltran_tx_id,
                 obligation_id: r.obligation_id,
+                clearing_batch_id: None,
+                settlement_id: None,
                 uetr: r.uetr,
                 end_to_end_id: r.end_to_end_id,
                 instruction_id: r.instruction_id,
+                message_id: format!("MSG-{}", r.deltran_tx_id),
                 instructed_amount: r.instructed_amount,
                 settlement_amount: r.settlement_amount,
                 currency: r.currency.parse().unwrap_or_default(),
+                exchange_rate: None,
+                debtor: Party {
+                    name: r.debtor_name.unwrap_or_default(),
+                    postal_address: None,
+                    identification: None,
+                    country_code: "XX".to_string(),
+                },
+                creditor: Party {
+                    name: r.creditor_name.unwrap_or_default(),
+                    postal_address: None,
+                    identification: None,
+                    country_code: "XX".to_string(),
+                },
+                debtor_agent: FinancialInstitution {
+                    bic: r.debtor_agent_bic,
+                    name: "Unknown Bank".to_string(),
+                    country_code: "XX".to_string(),
+                    clearing_system_member_id: None,
+                },
+                creditor_agent: FinancialInstitution {
+                    bic: r.creditor_agent_bic,
+                    name: "Unknown Bank".to_string(),
+                    country_code: "XX".to_string(),
+                    clearing_system_member_id: None,
+                },
+                debtor_account: AccountIdentification {
+                    iban: None,
+                    bban: None,
+                    other: None,
+                    account_type: AccountType::Other,
+                },
+                creditor_account: AccountIdentification {
+                    iban: None,
+                    bban: None,
+                    other: None,
+                    account_type: AccountType::Other,
+                },
+                creation_date: r.created_at,
+                requested_execution_date: None,
+                settlement_date: None,
+                value_date: None,
                 status: r.status.parse().unwrap_or(PaymentStatus::Received),
-                // TODO: Reconstruct Party, FinancialInstitution, etc.
-                ..Default::default()
+                status_reason: None,
+                charge_bearer: ChargeBearer::Shar,
+                charges: vec![],
+                remittance_info: String::new(),
+                remittance_structured: None,
+                risk_score: None,
+                compliance_status: ComplianceStatus::Pending,
+                sanctions_checked: false,
+                aml_score: None,
+                corridor: "UNKNOWN".to_string(),
+                priority: Priority::Normal,
+                liquidity_pool_id: None,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
             }))
         }
         None => Ok(None),
@@ -218,17 +274,75 @@ pub async fn get_payment_by_e2e(pool: &PgPool, end_to_end_id: &str) -> Result<Op
 
     match row {
         Some(r) => {
+            use crate::models::canonical::{Party, FinancialInstitution, AccountIdentification, AccountType, ChargeBearer, ComplianceStatus, Priority};
             Ok(Some(CanonicalPayment {
                 deltran_tx_id: r.deltran_tx_id,
                 obligation_id: r.obligation_id,
+                clearing_batch_id: None,
+                settlement_id: None,
                 uetr: r.uetr,
                 end_to_end_id: r.end_to_end_id,
                 instruction_id: r.instruction_id,
+                message_id: format!("MSG-{}", r.deltran_tx_id),
                 instructed_amount: r.instructed_amount,
                 settlement_amount: r.settlement_amount,
                 currency: r.currency.parse().unwrap_or_default(),
+                exchange_rate: None,
+                debtor: Party {
+                    name: r.debtor_name.unwrap_or_default(),
+                    postal_address: None,
+                    identification: None,
+                    country_code: "XX".to_string(),
+                },
+                creditor: Party {
+                    name: r.creditor_name.unwrap_or_default(),
+                    postal_address: None,
+                    identification: None,
+                    country_code: "XX".to_string(),
+                },
+                debtor_agent: FinancialInstitution {
+                    bic: r.debtor_agent_bic,
+                    name: "Unknown Bank".to_string(),
+                    country_code: "XX".to_string(),
+                    clearing_system_member_id: None,
+                },
+                creditor_agent: FinancialInstitution {
+                    bic: r.creditor_agent_bic,
+                    name: "Unknown Bank".to_string(),
+                    country_code: "XX".to_string(),
+                    clearing_system_member_id: None,
+                },
+                debtor_account: AccountIdentification {
+                    iban: None,
+                    bban: None,
+                    other: None,
+                    account_type: AccountType::Other,
+                },
+                creditor_account: AccountIdentification {
+                    iban: None,
+                    bban: None,
+                    other: None,
+                    account_type: AccountType::Other,
+                },
+                creation_date: r.created_at,
+                requested_execution_date: None,
+                settlement_date: None,
+                value_date: None,
                 status: r.status.parse().unwrap_or(PaymentStatus::Received),
-                ..Default::default()
+                status_reason: None,
+                charge_bearer: ChargeBearer::Shar,
+                charges: vec![],
+                remittance_info: String::new(),
+                remittance_structured: None,
+                risk_score: None,
+                compliance_status: ComplianceStatus::Pending,
+                sanctions_checked: false,
+                aml_score: None,
+                corridor: "UNKNOWN".to_string(),
+                priority: Priority::Normal,
+                liquidity_pool_id: None,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
             }))
         }
         None => Ok(None),

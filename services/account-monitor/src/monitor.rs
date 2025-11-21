@@ -94,7 +94,7 @@ impl AccountMonitor {
 
         info!("📥 Listening for camt.054 messages on NATS...");
 
-        use futures_util::StreamExt;
+        use futures::StreamExt;
         while let Some(msg) = subscriber.next().await {
             match String::from_utf8(msg.payload.to_vec()) {
                 Ok(xml) => {

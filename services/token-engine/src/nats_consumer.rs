@@ -30,6 +30,39 @@ pub struct FundingEvent {
     pub confirmed_at: DateTime<Utc>,
 }
 
+// ============================================================
+// TOKEN OPERATIONS - Token Engine is the ONLY service that
+// manipulates tokens. Other services REQUEST token operations.
+// ============================================================
+
+/// Token Transfer Request - from Settlement Engine or Clearing Engine
+/// Token Engine executes the actual token movement between bank accounts
+#[derive(Debug, Deserialize)]
+pub struct TokenTransferRequest {
+    #[serde(rename = "type")]
+    pub transfer_type: String,      // "LOCAL_TOKEN", "INTERNATIONAL_TOKEN"
+    pub obligation_id: Uuid,
+    pub payment_id: Uuid,
+    pub from_bank_bic: String,
+    pub to_bank_bic: String,
+    pub amount: Decimal,
+    pub currency: String,
+    #[serde(default)]
+    pub jurisdiction: Option<String>,
+    #[serde(default)]
+    pub settlement_type: Option<String>,
+}
+
+/// Token Burn Request - when fiat is withdrawn
+#[derive(Debug, Deserialize)]
+pub struct TokenBurnRequest {
+    pub burn_id: Uuid,
+    pub bank_bic: String,
+    pub amount: Decimal,
+    pub currency: String,
+    pub reason: String,             // "FIAT_WITHDRAWAL", "SETTLEMENT_COMPLETE"
+}
+
 pub struct NatsConsumer {
     client: async_nats::Client,
     stream_name: String,
@@ -327,6 +360,90 @@ impl NatsConsumer {
         Ok(())
     }
 
+    /// Start listening for token burn requests (deltran.token.burn)
+    /// CRITICAL: Tokens must be burned at end of transaction lifecycle
+    pub async fn start_burn_consumer(&self) -> Result<()> {
+        info!("🔥 Starting Token Burn consumer");
+
+        let mut subscriber = self.client.subscribe("deltran.token.burn").await?;
+        info!("📡 Subscribed to: deltran.token.burn");
+
+        while let Some(msg) = subscriber.next().await {
+            match serde_json::from_slice::<TokenBurnRequest>(&msg.payload) {
+                Ok(burn_request) => {
+                    info!(
+                        "🔥 Received burn request: {} for {} {} (reason: {})",
+                        burn_request.burn_id,
+                        burn_request.amount,
+                        burn_request.currency,
+                        burn_request.reason
+                    );
+
+                    // Execute token burn
+                    match self.burn_tokens(&burn_request).await {
+                        Ok(()) => {
+                            info!(
+                                "✅ Tokens burned successfully: {} {} (burn_id: {})",
+                                burn_request.amount,
+                                burn_request.currency,
+                                burn_request.burn_id
+                            );
+                        }
+                        Err(e) => {
+                            error!(
+                                "❌ Failed to burn tokens for burn_id {}: {}",
+                                burn_request.burn_id, e
+                            );
+                            // TODO: Implement retry logic or dead-letter queue
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to parse TokenBurnRequest from NATS message: {}", e);
+                }
+            }
+        }
+
+        warn!("⚠️ Token burn consumer ended");
+        Ok(())
+    }
+
+    /// Burn tokens - delete from system at end of transaction lifecycle
+    async fn burn_tokens(&self, request: &TokenBurnRequest) -> Result<()> {
+        info!(
+            "🔥 Burning tokens: {} {} for bank {} (reason: {})",
+            request.amount, request.currency, request.bank_bic, request.reason
+        );
+
+        // TODO: Implement actual token burn logic:
+        // 1. Delete token record from database (or mark as BURNED)
+        // 2. Update bank token balances (decrease)
+        // 3. Update system token supply (decrease)
+        // 4. Create burn audit log entry
+        // 5. Publish token.burned event for monitoring
+
+        // For now, just publish the burn event
+        let burn_event = serde_json::json!({
+            "burn_id": request.burn_id,
+            "bank_bic": request.bank_bic,
+            "amount": request.amount,
+            "currency": request.currency,
+            "reason": request.reason,
+            "burned_at": Utc::now().to_rfc3339(),
+        });
+
+        self.client
+            .publish("deltran.token.burned", serde_json::to_vec(&burn_event)?.into())
+            .await?;
+
+        info!(
+            "📤 Published token.burned event: {} ({} {} burned)",
+            request.burn_id, request.amount, request.currency
+        );
+
+        Ok(())
+    }
+
     /// Start continuous consumption loop
     pub async fn run_forever(self: Arc<Self>) {
         // Spawn CAMT.054 consumer task
@@ -343,13 +460,27 @@ impl NatsConsumer {
         });
 
         // Spawn Funding Confirmation consumer task (CRITICAL for token minting)
-        loop {
-            info!("🪙 Starting Funding Confirmation consumption loop");
+        let self_clone = self.clone();
+        tokio::spawn(async move {
+            loop {
+                info!("🪙 Starting Funding Confirmation consumption loop");
 
-            if let Err(e) = self.start_funding_consumer().await {
-                error!("Funding consumer error: {}. Restarting in 5 seconds...", e);
+                if let Err(e) = self_clone.start_funding_consumer().await {
+                    error!("Funding consumer error: {}. Restarting in 5 seconds...", e);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                }
+            }
+        });
+
+        // Spawn Token Burn consumer task (CRITICAL for token lifecycle completion)
+        loop {
+            info!("🔥 Starting Token Burn consumption loop");
+
+            if let Err(e) = self.start_burn_consumer().await {
+                error!("Token burn consumer error: {}. Restarting in 5 seconds...", e);
                 tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             }
         }
     }
+
 }

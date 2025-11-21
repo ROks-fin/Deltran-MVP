@@ -101,7 +101,14 @@
       "Bash(grep:*)",
       "Bash(killall docker-compose:*)",
       "Bash(./target/release/token-engine.exe:*)",
-      "Bash(del NUL 2)"
+      "Bash(del NUL 2)",
+      "Bash(timeout:*)",
+      "Bash(while read vol)",
+      "Bash(do docker volume rm $vol)",
+      "Bash(for port in 8081 8082 8084 8087 8088 8089)",
+      "Bash(for port in 8081 8082 8083 8084 8086 8087 8088 8089)",
+      "Bash(python -m json.tool:*)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []

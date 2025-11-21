@@ -20,10 +20,12 @@ mod models;
 mod iso20022;
 mod nats_router;
 mod db;
+mod metrics;
 
 use models::canonical::{CanonicalPayment, PaymentStatus};
 use iso20022::pain001;
 use nats_router::NatsRouter;
+use metrics::METRICS;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -101,16 +103,30 @@ async fn health_check(State(state): State<AppState>) -> Json<HealthResponse> {
     })
 }
 
+// Prometheus metrics endpoint
+async fn metrics_handler() -> Result<String, GatewayError> {
+    METRICS.export()
+        .map_err(|e| GatewayError::InternalError(format!("Failed to export metrics: {}", e)))
+}
+
 // pain.001 - Customer Credit Transfer Initiation
 async fn handle_pain001(
     State(state): State<AppState>,
     body: String,
 ) -> Result<Json<Vec<MessageResponse>>, GatewayError> {
+    let start = std::time::Instant::now();
+    METRICS.track_iso_message("pain.001");
+
     info!("Received pain.001 message");
 
     // Parse ISO message
+    let parse_start = std::time::Instant::now();
     let document = pain001::parse_pain001(&body)
-        .map_err(|e| GatewayError::ParseError(e.to_string()))?;
+        .map_err(|e| {
+            METRICS.iso_parse_errors_total.inc();
+            GatewayError::ParseError(e.to_string())
+        })?;
+    METRICS.iso_parse_duration_seconds.observe(parse_start.elapsed().as_secs_f64());
 
     // Convert to canonical model
     let canonical_payments = pain001::to_canonical(&document)
@@ -122,24 +138,29 @@ async fn handle_pain001(
         info!("Processing payment: {} (end_to_end_id: {}, UETR: {:?})",
               payment.deltran_tx_id, payment.end_to_end_id, payment.uetr);
 
+        METRICS.payments_total.inc();
+        METRICS.payments_received.inc();
+
         // Persist to database
-        db::insert_payment(&state.db, &payment).await?;
+        let db_start = std::time::Instant::now();
+        db::insert_payment(&state.db, &payment).await.map_err(|e| {
+            METRICS.db_errors_total.inc();
+            e
+        })?;
+        METRICS.db_operations_total.inc();
+        METRICS.db_operation_duration_seconds.observe(db_start.elapsed().as_secs_f64());
 
         // CORRECT ORDER according to DelTran architecture:
+        // Gateway → Compliance (ONLY!)
+        // Compliance will route to Obligation if ALLOW
+        // Obligation will route based on payment type:
+        //   - INTERNATIONAL → Risk Engine → Liquidity Router → Clearing → Settlement
+        //   - LOCAL → Clearing (direct) → Settlement
 
-        // 1. FIRST: Compliance Engine (AML/KYC/sanctions) - CRITICAL!
-        info!("🔒 Step 1: Routing to Compliance Engine for AML/KYC/sanctions check");
+        info!("🔒 Routing to Compliance Engine for AML/KYC/sanctions check");
+        info!("   Compliance will then route to Obligation Engine if payment is ALLOWED");
+        info!("   Obligation will determine: INTERNATIONAL (Risk → Liquidity → Clearing) vs LOCAL (Clearing direct)");
         state.router.route_to_compliance_engine(&payment).await?;
-
-        // 2. SECOND: Obligation Engine (create obligations)
-        // Note: In production, this should only happen if Compliance returns ALLOW
-        // For now, we send to both for async processing
-        info!("📋 Step 2: Routing to Obligation Engine");
-        state.router.route_to_obligation_engine(&payment).await?;
-
-        // 3. THIRD: Risk Engine (FX volatility check)
-        info!("⚠️ Step 3: Routing to Risk Engine for FX volatility assessment");
-        state.router.route_to_risk_engine(&payment).await?;
 
         responses.push(MessageResponse {
             deltran_tx_id: payment.deltran_tx_id,
@@ -149,6 +170,7 @@ async fn handle_pain001(
         });
     }
 
+    METRICS.payment_processing_duration_seconds.observe(start.elapsed().as_secs_f64());
     Ok(Json(responses))
 }
 
@@ -157,11 +179,17 @@ async fn handle_pacs008(
     State(state): State<AppState>,
     body: String,
 ) -> Result<Json<Vec<MessageResponse>>, GatewayError> {
+    let start = std::time::Instant::now();
+    METRICS.track_iso_message("pacs.008");
+
     info!("Received pacs.008 FI-to-FI payment message");
 
     // Parse ISO message
     let document = iso20022::parse_pacs008(&body)
-        .map_err(|e| GatewayError::ParseError(e.to_string()))?;
+        .map_err(|e| {
+            METRICS.iso_parse_errors_total.inc();
+            GatewayError::ParseError(e.to_string())
+        })?;
 
     // Convert to canonical model
     let canonical_payments = iso20022::pacs008_to_canonical(&document)
@@ -484,9 +512,17 @@ async fn main() -> anyhow::Result<()> {
         router,
     };
 
-    // Build router
+    // Build router with CORS and metrics
+    use tower_http::cors::{CorsLayer, Any};
+
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/metrics", get(metrics_handler))
         .route("/iso20022/pain.001", post(handle_pain001))
         .route("/iso20022/pacs.008", post(handle_pacs008))
         .route("/iso20022/camt.054", post(handle_camt054))
@@ -494,6 +530,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/iso20022/pain.002", post(handle_pain002))
         .route("/iso20022/camt.053", post(handle_camt053))
         .route("/payment/:tx_id", get(get_payment_status))
+        .layer(cors)
         .with_state(state);
 
     // Start server
@@ -508,6 +545,7 @@ async fn main() -> anyhow::Result<()> {
     info!("   POST /iso20022/camt.053 - Bank Statement (EOD)");
     info!("   GET  /payment/:tx_id - Get payment status");
     info!("   GET  /health - Health check");
+    info!("   GET  /metrics - Prometheus metrics");
 
     axum::serve(listener, app).await?;
 

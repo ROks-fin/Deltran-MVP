@@ -127,3 +127,9 @@ impl From<async_nats::Error> for ClearingError {
         ClearingError::Nats(err.to_string())
     }
 }
+
+impl From<async_nats::jetstream::context::PublishError> for ClearingError {
+    fn from(err: async_nats::jetstream::context::PublishError) -> Self {
+        ClearingError::Nats(err.to_string())
+    }
+}

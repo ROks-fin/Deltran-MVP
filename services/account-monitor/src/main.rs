@@ -28,7 +28,7 @@ async fn main() -> std::io::Result<()> {
     info!("🏦 Account Monitor starting...");
 
     // Load configuration
-    let config = Config::from_env().expect("Failed to load configuration");
+    let config = Config::from_env();
 
     // Create account monitor
     let monitor = AccountMonitor::new(config.clone()).await.expect("Failed to create monitor");

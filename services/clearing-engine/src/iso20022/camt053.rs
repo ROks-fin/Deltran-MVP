@@ -8,7 +8,7 @@ use rust_decimal::Decimal;
 use crate::errors::ClearingError;
 use super::common::{
     ActiveOrHistoricCurrencyAndAmount, PartyIdentification,
-    AccountIdentification, Agent, CreditDebitCode, EntryStatus,
+    AccountIdentification, AccountId, Agent, CreditDebitCode, EntryStatus,
 };
 
 /// camt.053 Document - BankToCustomerStatement
@@ -277,9 +277,9 @@ pub fn extract_eod_reconciliation(doc: &Camt053Document) -> Result<Vec<EODReconc
 
     for statement in &doc.bank_to_customer_statement.statements {
         // Extract account number
-        let account_number = match &statement.account.id {
-            AccountIdentification::IBAN(iban) => iban.clone(),
-            AccountIdentification::Other { identification, .. } => identification.clone(),
+        let account_number = match &statement.account.id.identification {
+            AccountId::IBAN(iban) => iban.clone(),
+            AccountId::Other(other) => other.id.clone(),
         };
 
         let currency = statement.account.currency.clone()

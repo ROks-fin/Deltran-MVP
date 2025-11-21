@@ -1,4 +1,5 @@
 pub mod accounts;
+pub mod cache;
 pub mod config;
 pub mod confirmation;
 pub mod error;

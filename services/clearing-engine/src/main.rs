@@ -4,8 +4,7 @@ use prometheus::{Encoder, TextEncoder};
 use serde::{Deserialize, Serialize};
 use tracing::{info, error};
 use tracing_subscriber;
-
-mod nats_consumer;
+use clearing_engine::nats_consumer;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ClearingWindow {

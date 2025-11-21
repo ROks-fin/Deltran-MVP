@@ -32,6 +32,9 @@ async-trait = "0.1"
 # NATS
 async-nats = "0.33"
 
+# Redis
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+
 # HTTP client
 reqwest = { version = "0.11", features = ["json"] }
 

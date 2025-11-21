@@ -8,7 +8,7 @@ use rust_decimal::Decimal;
 use crate::errors::ClearingError;
 use super::common::{
     ActiveOrHistoricCurrencyAndAmount, PartyIdentification,
-    AccountIdentification, Agent, PaymentIdentification,
+    AccountIdentification, AccountId, Agent, PaymentIdentification,
     RemittanceInformation, Purpose, ChargeBearerType,
 };
 
@@ -276,7 +276,7 @@ pub fn create_customer_payment(
         charge_bearer: Some(ChargeBearerType::SHAR), // Shared charges
         ultimate_debtor: None,
         creditor_agent: Some(Agent {
-            financial_institution_identification: super::common::FinancialInstitutionIdentification {
+            financial_institution_id: super::common::FinancialInstitutionIdentification {
                 bic: Some(creditor_bic),
                 clearing_system_member_id: None,
                 name: None,
@@ -292,7 +292,12 @@ pub fn create_customer_payment(
             country_of_residence: None,
         },
         creditor_account: CashAccount {
-            id: AccountIdentification::IBAN(creditor_iban),
+            id: AccountIdentification {
+                identification: AccountId::IBAN(creditor_iban),
+                account_type: None,
+                currency: None,
+                name: None,
+            },
             currency: None,
         },
         ultimate_creditor: None,
@@ -329,12 +334,12 @@ pub fn extract_payment_requests(doc: &Pain001Document) -> Result<Vec<PaymentRequ
         let debtor_name = payment_info.debtor.name.clone()
             .unwrap_or_else(|| "Unknown".to_string());
 
-        let debtor_account = match &payment_info.debtor_account.id {
-            AccountIdentification::IBAN(iban) => iban.clone(),
-            AccountIdentification::Other { identification, .. } => identification.clone(),
+        let debtor_account = match &payment_info.debtor_account.id.identification {
+            AccountId::IBAN(iban) => iban.clone(),
+            AccountId::Other(other) => other.id.clone(),
         };
 
-        let debtor_bic = payment_info.debtor_agent.financial_institution_identification.bic.clone()
+        let debtor_bic = payment_info.debtor_agent.financial_institution_id.bic.clone()
             .unwrap_or_else(|| "UNKNOWN".to_string());
 
         let requested_execution_date = payment_info.requested_execution_date.date_time;
@@ -343,13 +348,13 @@ pub fn extract_payment_requests(doc: &Pain001Document) -> Result<Vec<PaymentRequ
             let creditor_name = txn.creditor.name.clone()
                 .unwrap_or_else(|| "Unknown".to_string());
 
-            let creditor_account = match &txn.creditor_account.id {
-                AccountIdentification::IBAN(iban) => iban.clone(),
-                AccountIdentification::Other { identification, .. } => identification.clone(),
+            let creditor_account = match &txn.creditor_account.id.identification {
+                AccountId::IBAN(iban) => iban.clone(),
+                AccountId::Other(other) => other.id.clone(),
             };
 
             let creditor_bic = txn.creditor_agent.as_ref()
-                .and_then(|agent| agent.financial_institution_identification.bic.clone());
+                .and_then(|agent| agent.financial_institution_id.bic.clone());
 
             let (amount, currency) = if let Some(instructed) = &txn.amount.instructed_amount {
                 let amt = instructed.to_decimal()
@@ -366,7 +371,7 @@ pub fn extract_payment_requests(doc: &Pain001Document) -> Result<Vec<PaymentRequ
 
             requests.push(PaymentRequest {
                 payment_info_id: payment_info.payment_information_id.clone(),
-                debtor_name,
+                debtor_name: debtor_name.clone(),
                 debtor_account: debtor_account.clone(),
                 debtor_bic: debtor_bic.clone(),
                 creditor_name,

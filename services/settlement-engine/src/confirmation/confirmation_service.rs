@@ -3,7 +3,7 @@
 use crate::confirmation::{Camt054Handler, Camt054Notification, UetrMatcher};
 use crate::error::Result;
 use async_nats::jetstream;
-use futures_util::StreamExt;
+use tokio_stream::StreamExt;
 use sqlx::PgPool;
 use std::sync::Arc;
 use tracing::{error, info};

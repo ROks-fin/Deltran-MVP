@@ -15,6 +15,9 @@ pub struct PartyIdentification {
 
     #[serde(rename = "Id", skip_serializing_if = "Option::is_none")]
     pub identification: Option<Party>,
+
+    #[serde(rename = "CtryOfRes", skip_serializing_if = "Option::is_none")]
+    pub country_of_residence: Option<String>,
 }
 
 /// Postal Address
@@ -98,6 +101,26 @@ pub struct SchemeName {
 pub struct Agent {
     #[serde(rename = "FinInstnId")]
     pub financial_institution_id: FinancialInstitutionIdentification,
+
+    #[serde(rename = "BrnchId", skip_serializing_if = "Option::is_none")]
+    pub branch_identification: Option<BranchIdentification>,
+}
+
+impl Agent {
+    // Alias for backward compatibility
+    pub fn financial_institution_identification(&self) -> &FinancialInstitutionIdentification {
+        &self.financial_institution_id
+    }
+}
+
+/// Branch Identification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BranchIdentification {
+    #[serde(rename = "Id", skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+
+    #[serde(rename = "Nm", skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 /// Financial Institution Identification
@@ -114,6 +137,9 @@ pub struct FinancialInstitutionIdentification {
 
     #[serde(rename = "PstlAdr", skip_serializing_if = "Option::is_none")]
     pub postal_address: Option<PostalAddress>,
+
+    #[serde(rename = "Othr", skip_serializing_if = "Option::is_none")]
+    pub other: Option<GenericIdentification>,
 }
 
 /// Clearing System Member Identification
@@ -154,12 +180,10 @@ pub struct AccountIdentification {
 
 /// Account ID
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountId {
-    #[serde(rename = "IBAN", skip_serializing_if = "Option::is_none")]
-    pub iban: Option<String>,
-
-    #[serde(rename = "Othr", skip_serializing_if = "Option::is_none")]
-    pub other: Option<GenericAccountIdentification>,
+#[serde(untagged)]
+pub enum AccountId {
+    IBAN(String),
+    Other(GenericAccountIdentification),
 }
 
 /// Generic Account Identification
@@ -206,7 +230,7 @@ impl ActiveOrHistoricCurrencyAndAmount {
 }
 
 /// Group Header
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GroupHeader {
     #[serde(rename = "MsgId")]
     pub message_id: String,

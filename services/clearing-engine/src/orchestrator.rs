@@ -308,7 +308,8 @@ impl ClearingOrchestrator {
                 .map_err(|e| ClearingError::Serialization(e))?
                 .into(),
         )
-        .await?;
+        .await
+        .map_err(|e| ClearingError::Nats(e.to_string()))?;
 
         Ok(())
     }

@@ -79,18 +79,27 @@ pub async fn start_obligation_consumer(nats_url: &str) -> anyhow::Result<()> {
                                   obligation.obligation_id, payment.deltran_tx_id);
 
                             // Route based on payment type:
-                            // International → Clearing Engine (multilateral netting)
-                            // Local → Liquidity Router (select local payout bank)
-                            // NOTE: Token Engine будет вызван ПОСЛЕ settlement и camt.054 confirmation
+                            // ============================================================
+                            // INTERNATIONAL: Risk Engine → Liquidity Router → Clearing
+                            //   - Risk Engine выбирает путь: instant buy, hedging, clearing
+                            //   - Liquidity Router ищет лучшие FX курсы у партнёров
+                            //   - Работает с несколькими валютами/юрисдикциями
+                            //
+                            // LOCAL: Obligation → Clearing (напрямую)
+                            //   - Для оптимальной маршрутизации токенов/фиата между банками
+                            //   - Без участия Risk/Liquidity (одна юрисдикция, одна валюта)
+                            // ============================================================
                             if is_cross_border(&payment) {
-                                info!("🌍 Cross-border payment - routing to Clearing Engine");
-                                if let Err(e) = publish_to_clearing(&nats_for_publish, &payment, &obligation).await {
-                                    error!("Failed to route to Clearing Engine: {}", e);
+                                info!("🌍 INTERNATIONAL payment - routing to Risk Engine for path selection");
+                                info!("   Risk Engine → Liquidity Router → Clearing/Settlement");
+                                if let Err(e) = publish_to_risk_engine(&nats_for_publish, &payment, &obligation).await {
+                                    error!("Failed to route to Risk Engine: {}", e);
                                 }
                             } else {
-                                info!("🏠 Local payment - routing to Liquidity Router");
-                                if let Err(e) = publish_to_liquidity_router(&nats_for_publish, &payment, &obligation).await {
-                                    error!("Failed to route to Liquidity Router: {}", e);
+                                info!("🏠 LOCAL payment - routing DIRECTLY to Clearing Engine");
+                                info!("   Direct token/fiat routing between banks (same jurisdiction)");
+                                if let Err(e) = publish_to_clearing_local(&nats_for_publish, &payment, &obligation).await {
+                                    error!("Failed to route to Clearing Engine: {}", e);
                                 }
                             }
 
@@ -198,24 +207,64 @@ async fn publish_to_token_engine(nats_client: &Client, payment: &CanonicalPaymen
     Ok(())
 }
 
-async fn publish_to_liquidity_router(nats_client: &Client, payment: &CanonicalPayment, obligation: &ObligationCreatedEvent) -> anyhow::Result<()> {
-    let subject = "deltran.liquidity.select.local";
+/// Route INTERNATIONAL payments to Risk Engine for path selection
+/// Risk Engine decides: instant buy, hedging (full/partial), or clearing
+async fn publish_to_risk_engine(nats_client: &Client, payment: &CanonicalPayment, obligation: &ObligationCreatedEvent) -> anyhow::Result<()> {
+    let subject = "deltran.risk.check";
 
-    // For local payments, Liquidity Router selects optimal local payout bank
-    let liquidity_request = serde_json::json!({
-        "payment": payment,
-        "obligation": obligation,
-        "payment_type": "LOCAL",
-        "jurisdiction": extract_country_from_bic(&payment.creditor_agent.bic),
+    let debtor_country = extract_country_from_bic(&payment.debtor_agent.bic);
+    let creditor_country = extract_country_from_bic(&payment.creditor_agent.bic);
+
+    // Create risk check request for international payment
+    let risk_request = serde_json::json!({
+        "request_id": Uuid::new_v4(),
+        "payment_id": payment.deltran_tx_id,
+        "obligation_id": obligation.obligation_id,
+        "currency_pair": format!("{}/{}", payment.currency, payment.currency), // Will be updated with actual FX pair
+        "amount": payment.settlement_amount,
+        "from_currency": payment.currency,
+        "to_currency": payment.currency, // Target currency for conversion
+        "sender_country": debtor_country,
+        "receiver_country": creditor_country,
+        "payment_type": "INTERNATIONAL",
+        "debtor_bic": payment.debtor_agent.bic.clone(),
+        "creditor_bic": payment.creditor_agent.bic.clone(),
     });
 
-    let payload = serde_json::to_vec(&liquidity_request)?;
+    let payload = serde_json::to_vec(&risk_request)?;
 
     nats_client.publish(subject, payload.into()).await?;
 
-    info!("📤 Routed to Liquidity Router (local): {} in {}",
-          payment.deltran_tx_id,
-          extract_country_from_bic(&payment.creditor_agent.bic));
+    info!("📤 Routed to Risk Engine (international): {} ({} → {})",
+          payment.deltran_tx_id, debtor_country, creditor_country);
+
+    Ok(())
+}
+
+/// Route LOCAL payments directly to Clearing Engine (bypassing Risk/Liquidity)
+/// For optimal token/fiat routing between banks in same jurisdiction
+async fn publish_to_clearing_local(nats_client: &Client, payment: &CanonicalPayment, obligation: &ObligationCreatedEvent) -> anyhow::Result<()> {
+    let subject = "deltran.clearing.submit.local";
+
+    let jurisdiction = extract_country_from_bic(&payment.creditor_agent.bic);
+
+    // Create local clearing submission - direct token/fiat routing
+    let clearing_data = serde_json::json!({
+        "payment": payment,
+        "obligation": obligation,
+        "routing_type": "LOCAL_DIRECT",
+        "jurisdiction": jurisdiction,
+        "settlement_type": "INSTANT", // Local payments can settle instantly
+        "skip_risk_check": true, // Same jurisdiction, no FX risk
+        "skip_liquidity_router": true, // No cross-currency optimization needed
+    });
+
+    let payload = serde_json::to_vec(&clearing_data)?;
+
+    nats_client.publish(subject, payload.into()).await?;
+
+    info!("📤 Routed DIRECTLY to Clearing (local): {} in {} (instant settlement)",
+          payment.deltran_tx_id, jurisdiction);
 
     Ok(())
 }

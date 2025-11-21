@@ -7,6 +7,7 @@ use tracing::{info, error, warn};
 use uuid::Uuid;
 use rust_decimal::Decimal;
 use chrono::Utc;
+use tokio_stream::StreamExt;
 
 #[derive(Debug, Deserialize)]
 pub struct SettlementInstruction {
@@ -134,7 +135,7 @@ pub async fn start_settlement_consumer(nats_url: &str) -> anyhow::Result<()> {
                                     error!(
                                         "❌ Settlement failed: {} - {}",
                                         result.settlement_id,
-                                        result.error_message.unwrap_or_default()
+                                        result.error_message.clone().unwrap_or_default()
                                     );
                                 }
                                 _ => {
@@ -395,6 +396,28 @@ async fn publish_settlement_completed(
             .await?;
 
         info!("📤 Published funding confirmation for Token Engine");
+
+        // CRITICAL: Burn tokens after settlement completes (end of transaction lifecycle)
+        // Token lifecycle: MINT (funding confirmed) → USE (settlement) → BURN (settlement complete)
+        let burn_request = serde_json::json!({
+            "burn_id": uuid::Uuid::new_v4(),
+            "settlement_id": result.settlement_id,
+            "payment_id": result.payment_id,
+            "bank_bic": "SETTLEMENT",  // TODO: extract from instruction
+            "amount": result.amount,
+            "currency": result.currency,
+            "reason": "SETTLEMENT_COMPLETE",
+            "burned_at": chrono::Utc::now().to_rfc3339(),
+        });
+
+        nats_client
+            .publish(
+                "deltran.token.burn",
+                serde_json::to_vec(&burn_request)?.into(),
+            )
+            .await?;
+
+        info!("🔥 Published token burn request for settlement {} - transaction lifecycle complete", result.settlement_id);
     }
 
     Ok(())

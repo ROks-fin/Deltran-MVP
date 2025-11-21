@@ -1,5 +1,6 @@
 // NATS Consumer for Liquidity Router
-// Listens to deltran.liquidity.select (international) and deltran.liquidity.select.local (local)
+// Listens to deltran.liquidity.select (international), deltran.liquidity.select.local (local)
+// and deltran.settlement.path (instant buy requests from Risk Engine)
 
 use async_nats::Client;
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,7 @@ use tracing::{info, error, warn};
 use uuid::Uuid;
 use futures_util::StreamExt;
 use rust_decimal::Decimal;
+use chrono::Utc;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct NetPosition {
@@ -111,6 +113,72 @@ pub struct CorridorInfo {
     pub estimated_time_hours: i32,
 }
 
+// ======== INSTANT BUY SETTLEMENT PATH TYPES (from Risk Engine) ========
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct SettlementPathDecision {
+    pub path_type: SettlementPathType,
+    pub confidence: f64,
+    pub estimated_cost_bps: i32,
+    pub estimated_time_ms: u64,
+    pub reasoning: String,
+    pub fx_provider: Option<String>,
+    pub hedge_details: Option<HedgeDetails>,
+    pub clearing_details: Option<ClearingDetails>,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SettlementPathType {
+    InstantBuy,
+    FullHedge,
+    PartialHedge,
+    Clearing,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct HedgeDetails {
+    pub hedge_ratio: f64,
+    pub instrument: String,
+    pub notional_amount: Decimal,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ClearingDetails {
+    pub window_id: Option<Uuid>,
+    pub expected_netting_benefit_pct: f64,
+    pub time_to_settlement_ms: u64,
+}
+
+// ======== FX PROVIDER SELECTION TYPES ========
+
+#[derive(Debug, Serialize, Clone)]
+pub struct FxProvider {
+    pub provider_code: String,
+    pub provider_name: String,
+    pub bid_rate: Decimal,
+    pub ask_rate: Decimal,
+    pub spread_bps: i32,
+    pub volume_discount_available: bool,
+    pub execution_time_ms: u64,
+    pub priority: i32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InstantBuyExecution {
+    pub execution_id: Uuid,
+    pub transaction_id: Option<Uuid>,
+    pub from_currency: String,
+    pub to_currency: String,
+    pub amount: Decimal,
+    pub selected_provider: FxProvider,
+    pub executed_rate: Decimal,
+    pub total_cost_bps: i32,
+    pub execution_time_ms: u64,
+    pub status: String,
+    pub executed_at: String,
+}
+
 pub async fn start_liquidity_consumer(nats_url: &str) -> anyhow::Result<()> {
     info!("💰 Starting Liquidity Router NATS consumer...");
 
@@ -126,9 +194,14 @@ pub async fn start_liquidity_consumer(nats_url: &str) -> anyhow::Result<()> {
     let mut local_sub = nats_client.subscribe("deltran.liquidity.select.local").await?;
     info!("📡 Subscribed to: deltran.liquidity.select.local (local)");
 
+    // Subscribe to settlement path decisions (from Risk Engine)
+    let mut path_sub = nats_client.subscribe("deltran.settlement.path").await?;
+    info!("📡 Subscribed to: deltran.settlement.path (instant buy/hedging from Risk Engine)");
+
     // Clone for spawned tasks
     let nats_for_international = nats_client.clone();
     let nats_for_local = nats_client.clone();
+    let nats_for_path = nats_client.clone();
 
     // Spawn international consumer task
     tokio::spawn(async move {
@@ -216,6 +289,66 @@ pub async fn start_liquidity_consumer(nats_url: &str) -> anyhow::Result<()> {
         }
 
         warn!("⚠️ Local liquidity consumer task ended");
+    });
+
+    // Spawn settlement path consumer task (instant buy / hedging from Risk Engine)
+    tokio::spawn(async move {
+        info!("🔄 Settlement path consumer task started (for instant buy)");
+
+        while let Some(msg) = path_sub.next().await {
+            match serde_json::from_slice::<SettlementPathDecision>(&msg.payload) {
+                Ok(decision) => {
+                    info!(
+                        "🎯 Received settlement path decision: {:?} (confidence: {:.2})",
+                        decision.path_type,
+                        decision.confidence
+                    );
+
+                    // Handle based on path type
+                    match decision.path_type {
+                        SettlementPathType::InstantBuy => {
+                            // Execute instant FX buy - select best provider
+                            match execute_instant_buy(&decision).await {
+                                Ok(execution) => {
+                                    info!(
+                                        "✅ Instant buy executed: {} at rate {} via {}",
+                                        execution.execution_id,
+                                        execution.executed_rate,
+                                        execution.selected_provider.provider_code
+                                    );
+
+                                    // Publish execution result
+                                    if let Err(e) = publish_instant_buy_result(&nats_for_path, &execution).await {
+                                        error!("Failed to publish instant buy result: {}", e);
+                                    }
+                                }
+                                Err(e) => {
+                                    error!("Failed to execute instant buy: {}", e);
+                                }
+                            }
+                        }
+                        SettlementPathType::FullHedge | SettlementPathType::PartialHedge => {
+                            // Forward to hedging execution (mock for now)
+                            info!(
+                                "🛡️ Hedging request received: {:?} with ratio {:?}",
+                                decision.path_type,
+                                decision.hedge_details.as_ref().map(|h| h.hedge_ratio)
+                            );
+                            // In production, this would route to a hedging service
+                        }
+                        SettlementPathType::Clearing => {
+                            // Clearing will be handled by Clearing Engine
+                            info!("📊 Clearing path - will be handled by Clearing Engine");
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to parse SettlementPathDecision from NATS message: {}", e);
+                }
+            }
+        }
+
+        warn!("⚠️ Settlement path consumer task ended");
     });
 
     info!("✅ Liquidity Router consumers started successfully");
@@ -388,4 +521,141 @@ async fn publish_to_settlement(
     );
 
     Ok(())
+}
+
+// ======== INSTANT BUY FX EXECUTION ========
+
+/// Execute instant FX buy by selecting the best provider
+async fn execute_instant_buy(decision: &SettlementPathDecision) -> anyhow::Result<InstantBuyExecution> {
+    let start_time = std::time::Instant::now();
+
+    // Get suggested provider from Risk Engine or select best one
+    let provider_hint = decision.fx_provider.as_deref().unwrap_or("GLOBAL-FX-POOL");
+
+    info!(
+        "💱 Executing instant buy via provider hint: {}",
+        provider_hint
+    );
+
+    // Get available providers for the corridor
+    // In production, this would query the database and real-time rates
+    let providers = get_fx_providers(provider_hint).await;
+
+    // Select best provider based on spread and execution time
+    let best_provider = providers
+        .into_iter()
+        .min_by_key(|p| p.spread_bps * 100 + p.execution_time_ms as i32)
+        .ok_or_else(|| anyhow::anyhow!("No FX providers available"))?;
+
+    info!(
+        "✨ Selected best FX provider: {} (spread: {} bps, time: {} ms)",
+        best_provider.provider_code,
+        best_provider.spread_bps,
+        best_provider.execution_time_ms
+    );
+
+    // Execute the trade (mock execution)
+    let executed_rate = best_provider.ask_rate; // Buy at ask rate
+    let execution_time = start_time.elapsed().as_millis() as u64;
+
+    Ok(InstantBuyExecution {
+        execution_id: Uuid::new_v4(),
+        transaction_id: None, // Will be linked by caller
+        from_currency: "USD".to_string(), // Would come from request
+        to_currency: "AED".to_string(),   // Would come from request
+        amount: Decimal::from(10000),     // Would come from request
+        selected_provider: best_provider,
+        executed_rate,
+        total_cost_bps: decision.estimated_cost_bps,
+        execution_time_ms: execution_time,
+        status: "EXECUTED".to_string(),
+        executed_at: Utc::now().to_rfc3339(),
+    })
+}
+
+/// Get available FX providers for a corridor
+async fn get_fx_providers(provider_hint: &str) -> Vec<FxProvider> {
+    // Mock FX providers - in production, query database and real-time feeds
+    let providers = vec![
+        FxProvider {
+            provider_code: "ENBD-FX".to_string(),
+            provider_name: "Emirates NBD FX".to_string(),
+            bid_rate: Decimal::from_str_exact("3.6720").unwrap_or(Decimal::from(3)),
+            ask_rate: Decimal::from_str_exact("3.6730").unwrap_or(Decimal::from(3)),
+            spread_bps: 3,
+            volume_discount_available: true,
+            execution_time_ms: 300,
+            priority: 1,
+        },
+        FxProvider {
+            provider_code: "UAE-EXCHANGE".to_string(),
+            provider_name: "UAE Exchange".to_string(),
+            bid_rate: Decimal::from_str_exact("3.6710").unwrap_or(Decimal::from(3)),
+            ask_rate: Decimal::from_str_exact("3.6740").unwrap_or(Decimal::from(3)),
+            spread_bps: 8,
+            volume_discount_available: true,
+            execution_time_ms: 500,
+            priority: 2,
+        },
+        FxProvider {
+            provider_code: "CLS-SETTLEMENT".to_string(),
+            provider_name: "CLS Bank Settlement".to_string(),
+            bid_rate: Decimal::from_str_exact("3.6722").unwrap_or(Decimal::from(3)),
+            ask_rate: Decimal::from_str_exact("3.6728").unwrap_or(Decimal::from(3)),
+            spread_bps: 2,
+            volume_discount_available: false,
+            execution_time_ms: 200,
+            priority: 1,
+        },
+        FxProvider {
+            provider_code: "GLOBAL-FX-POOL".to_string(),
+            provider_name: "Global FX Pool".to_string(),
+            bid_rate: Decimal::from_str_exact("3.6700").unwrap_or(Decimal::from(3)),
+            ask_rate: Decimal::from_str_exact("3.6750").unwrap_or(Decimal::from(3)),
+            spread_bps: 15,
+            volume_discount_available: true,
+            execution_time_ms: 800,
+            priority: 5,
+        },
+    ];
+
+    // If provider hint matches, prioritize that provider
+    let mut sorted = providers;
+    if let Some(pos) = sorted.iter().position(|p| p.provider_code == provider_hint) {
+        let preferred = sorted.remove(pos);
+        sorted.insert(0, preferred);
+    }
+
+    sorted
+}
+
+/// Publish instant buy execution result
+async fn publish_instant_buy_result(
+    nats_client: &Client,
+    execution: &InstantBuyExecution,
+) -> anyhow::Result<()> {
+    let subject = "deltran.liquidity.instant_buy.result";
+    let payload = serde_json::to_vec(execution)?;
+
+    nats_client.publish(subject, payload.into()).await?;
+
+    info!(
+        "📤 Published instant buy result: {} (rate: {}, provider: {})",
+        execution.execution_id,
+        execution.executed_rate,
+        execution.selected_provider.provider_code
+    );
+
+    Ok(())
+}
+
+// Helper for Decimal parsing
+trait DecimalExt {
+    fn from_str_exact(s: &str) -> Option<Decimal>;
+}
+
+impl DecimalExt for Decimal {
+    fn from_str_exact(s: &str) -> Option<Decimal> {
+        s.parse().ok()
+    }
 }

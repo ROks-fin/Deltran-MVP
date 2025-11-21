@@ -432,13 +432,13 @@ pub fn to_canonical(pacs008: &Document) -> Result<Vec<CanonicalPayment>> {
             debtor_agent: FinancialInstitution {
                 bic: tx.debtor_agent.financial_institution_identification.bic.clone(),
                 name: tx.debtor_agent.financial_institution_identification.name.clone().unwrap_or_default(),
-                country_code: debtor_country,
+                country_code: debtor_country.clone(),
                 clearing_system_member_id: None,
             },
             creditor_agent: FinancialInstitution {
                 bic: tx.creditor_agent.financial_institution_identification.bic.clone(),
                 name: tx.creditor_agent.financial_institution_identification.name.clone().unwrap_or_default(),
-                country_code: creditor_country,
+                country_code: creditor_country.clone(),
                 clearing_system_member_id: None,
             },
             debtor_account: tx.debtor_account.as_ref().map(|acc| AccountIdentification {

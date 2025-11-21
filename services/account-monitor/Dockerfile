@@ -6,7 +6,7 @@ FROM rust:1.75 as builder
 WORKDIR /app
 
 # Copy Cargo files
-COPY Cargo.toml Cargo.lock ./
+COPY Cargo.toml ./
 
 # Copy source code
 COPY src ./src

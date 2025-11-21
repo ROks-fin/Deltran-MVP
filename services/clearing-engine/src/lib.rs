@@ -1,7 +1,9 @@
 // Clearing Engine Library
 // Production-ready clearing and netting implementation
 
+pub mod cache;
 pub mod config;
+pub mod consensus;
 pub mod database;
 pub mod errors;
 pub mod models;

@@ -27,6 +27,7 @@ rust_decimal = { version = "1.33", features = ["serde-with-str"] }
 
 # NATS
 async-nats = "0.33"
+futures = "0.3"
 
 # HTTP client (для bank API)
 reqwest = { version = "0.11", features = ["json"] }
